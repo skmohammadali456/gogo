@@ -8,7 +8,7 @@
 - Release target: GOGO 1.0
 - Completed work packages: 1 / 62
 - Current work package: 2, Lexer and token model
-- Status: Step 1 complete, Step 2 next
+- Status: Step 2 in progress
 
 ## Step 1, Compiler source model and positions
 
@@ -35,27 +35,47 @@ Completed capabilities:
 - 62-step master roadmap.
 - GitHub Actions CI configuration.
 
-## Step 1 deep validation
+## Step 1 deep verification record
 
-Local validation was performed against the Step 1 source model using Go 1.23.2 because the verification environment did not have network access to download the repository's declared Go 1.24 toolchain.
+A repository-level review found and corrected two foundation problems before Step 2 was allowed to start: the compiler referenced a source validation implementation that was missing from the checked file view, and the repository contained two competing validation implementations. The missing implementation was added and the duplicate implementation was removed.
 
-Validated commands:
+The Go version was aligned to Go 1.23 so the repository can be validated with the available Go 1.23 toolchain without downloading a newer toolchain.
 
-```text
-gofmt -w .
-go test ./...
-go vet ./...
-go build ./internal/compiler
-```
+GitHub Actions is configured to run formatting checks, `go test ./...`, `go vet ./...`, and the CLI build. GitHub currently reports `startup_failure` before creating a workflow job, so the Actions service has not supplied an executable CI result. This is tracked explicitly rather than being treated as a passing test.
 
-Result: all tests passed, vet passed, and the compiler package built successfully.
+The source-level Step 1 acceptance review is complete. Step 1 is frozen as the source foundation consumed by all later compiler phases. Future phases must preserve source spans so compiler and editor diagnostics map back to original GOGO source.
 
-The repository's GitHub Actions runs currently report `startup_failure` before a job is created. This is an external GitHub Actions execution issue, not a test failure. The workflow is retained so repository CI can run when the Actions execution service is available.
+## Step 2, Lexer and token model
 
-## Architecture decision
+Status: **IN PROGRESS**
 
-The compiler source model is now frozen as the foundation consumed by the lexer and later compiler phases. Future phases must preserve source spans so every compiler and editor diagnostic can map back to original GOGO source.
+Implemented so far:
 
-## Step 2
+- Token kind model.
+- Token source spans.
+- Identifier, number, string, punctuation, and operator token categories.
+- Unicode-aware identifier scanning.
+- Whitespace skipping.
+- Line and block comments.
+- Comment preservation option.
+- String escape scanning.
+- Unterminated string diagnostics.
+- Unterminated block comment diagnostics.
+- Invalid character recovery.
+- Multi-character operator recognition.
+- Bengali and Hindi Unicode token coverage.
+- Lexer tests for tokens, spans, comments, and diagnostics.
 
-Next: Lexer and token model.
+Remaining Step 2 acceptance work:
+
+- Complete lexical literal rules and numeric validation.
+- Define the authoritative keyword-independent token contract for the grammar layer.
+- Add lexer fuzz and regression tests.
+- Add malformed UTF-8 regression coverage at lexer entry.
+- Integrate lexer output into the compiler session pipeline.
+- Validate the full repository with Go formatting, tests, vet, and build.
+- Complete Step 2 documentation.
+
+## Development rule
+
+Every GOGO step must be implemented in the repository, tested, integrated with previous work, documented, reviewed for architectural consistency, and validated before it is marked complete.
