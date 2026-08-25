@@ -36,7 +36,7 @@ Implement the primary English GOGO grammar. Support readable constructs such as 
 
 **7. Bengali grammar**
 
-Add Bengali keywords and natural Bengali forms for the supported GOGO constructs. Bengali source must remain first-class, including Unicode identifiers, diagnostics, editor positions, formatter support, and mixed-language projects where explicitly allowed.
+Status: **COMPLETE**. Bengali keywords and natural Bengali forms are implemented through the Step 5 vocabulary abstraction for all Step 6 constructs, with Unicode identifiers, localized diagnostics, UTF-8 source positions, formatter compatibility expectations, parser recovery coverage, AST equivalence tests, and isolated mixed-language sessions. See `docs/compiler/bengali-grammar.md`.
 
 **8. Hindi grammar**
 
