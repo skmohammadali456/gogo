@@ -36,6 +36,7 @@ func (s *Session) LexFile(id uint32) []token.Token {
 	l := lexer.New(file)
 	tokens := l.LexAll()
 	for _, diagnostic := range l.Diagnostics() {
+		diagnostic.FileID = id
 		s.Diagnostics.Add(diagnostic)
 	}
 	return tokens
