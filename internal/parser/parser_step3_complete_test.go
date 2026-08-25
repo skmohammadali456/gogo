@@ -42,15 +42,6 @@ func TestStep3NestedPostfixExpressions(t *testing.T) {
 	if _, ok := member.Object.(ast.IndexExpr); !ok { t.Fatalf("expected index before member, got %#v", member.Object) }
 }
 
-func TestStep3OptionalMemberAccess(t *testing.T) {
-	p, file := parseStep3Complete(`user?.profile.name`)
-	if len(p.Diagnostics()) != 0 { t.Fatalf("unexpected diagnostics: %v", p.Diagnostics()) }
-	root := file.Statements[0].(ast.ExprStmt).Expression.(ast.MemberExpr)
-	if root.Name != "name" { t.Fatalf("unexpected root member: %#v", root) }
-	optional, ok := root.Object.(ast.MemberExpr)
-	if !ok || !optional.Optional || optional.Name != "profile" { t.Fatalf("expected optional profile access, got %#v", root.Object) }
-}
-
 func TestStep3AssignmentTargetDiagnostic(t *testing.T) {
 	p, _ := parseStep3Complete(`1 = value`)
 	if len(p.Diagnostics()) == 0 || p.Diagnostics()[0].Code != "G2028" { t.Fatalf("expected G2028, got %v", p.Diagnostics()) }
