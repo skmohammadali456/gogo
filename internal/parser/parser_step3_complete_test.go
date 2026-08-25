@@ -101,7 +101,7 @@ func TestStep3MalformedObjectRecoversToNextProperty(t *testing.T) {
 func TestStep3StrayClosingBraceDoesNotHang(t *testing.T) {
 	p, file := parseStep3Complete(`} create variable good as 3`)
 	if len(p.Diagnostics()) == 0 || p.Diagnostics()[0].Code != "G2034" { t.Fatalf("expected G2034, got %v", p.Diagnostics()) }
-	if len(file.Statements) != 1 { t.Fatalf("expected parser to continue after stray brace, got %d statements", len(file.Statements) }) }
+	if len(file.Statements) != 1 { t.Fatalf("expected parser to continue after stray brace, got %d statements", len(file.Statements)) }
 }
 
 func TestStep3FunctionTrailingComma(t *testing.T) {
