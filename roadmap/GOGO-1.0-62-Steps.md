@@ -4,9 +4,9 @@ GOGO is being developed as a Go-powered, TypeScript-class frontend and UI progra
 
 | # | Work package | Status |
 |---:|---|---|
-| 1 | Compiler source model and positions | **Complete** |
-| 2 | Lexer and token model | **Implementation complete, runtime validation pending** |
-| 3 | Parser and AST | **Implementation complete, runtime validation blocked** |
+| 1 | Compiler source model and positions | **Audited, runtime validation pending** |
+| 2 | Lexer and token model | **Audited, runtime validation pending** |
+| 3 | Parser and AST | **Audited, runtime validation blocked** |
 | 4 | Compiler diagnostics | Planned |
 | 5 | Grammar abstraction | Planned |
 | 6 | English grammar | Planned |
@@ -69,17 +69,23 @@ GOGO is being developed as a Go-powered, TypeScript-class frontend and UI progra
 
 ## Step 1 acceptance record
 
-Step 1 is complete. It established the source foundation used by all later compiler phases: stable file identity, UTF-8 validation, byte offsets, line and column positions, source spans, Unicode cursor operations, source invariants, structured diagnostics, and compilation session integration. It also includes unit tests, multilingual test coverage, technical documentation, and CI configuration.
+Step 1 has completed a deep source audit and corrective pass. It establishes stable file identity, UTF-8 validation, byte offsets, one-based line and column positions, half-open source spans, Unicode cursor operations, source invariants, structured diagnostics, and compilation session integration.
+
+Deep audit fixes include restoring the explicit `ValidateUTF8` API required by the Step 1 test suite, keeping source validation explicit before compiler-session file replacement, and removing duplicate validation test names.
+
+Runtime acceptance remains pending until `gofmt`, `go test ./...`, `go vet ./...`, CLI build, and CI execution can run.
 
 ## Step 2 acceptance record
 
-Step 2 implementation is complete. The lexer foundation contains a canonical token model, exact source text, source spans, Unicode identifiers, English/Bengali/Hindi lexical coverage, numeric literals, string literals and escape validation, operators, punctuation, whitespace, comments, recovery, malformed UTF-8 handling, human-readable diagnostics, compiler-session integration, regression tests, fuzz coverage, integration tests, and formal documentation.
+Step 2 has completed a deep source audit and corrective pass. The lexer foundation contains a canonical token model, exact source text, source spans, Unicode identifiers, English/Bengali/Hindi lexical coverage, numeric literals, string literals and escape validation, operators, punctuation, whitespace, comments, recovery, malformed UTF-8 handling, human-readable diagnostics, compiler-session integration, regression tests, fuzz coverage, integration tests, and formal documentation.
 
-The only remaining Step 2 gate is runtime execution of formatting, tests, vet, CLI build, bounded fuzz smoke testing, and GitHub Actions. GitHub Actions currently returns `startup_failure` before a workflow job is created, so this infrastructure failure is tracked separately and is not treated as a passing CI result.
+Deep audit fixes include hardened numeric parsing, rejection of malformed numeric adjacency, consistent ASCII numeric digit validation, Unicode scalar validation for braced escapes, and invalid UTF-8 detection before comment and whitespace skipping. Acceptance tests now cover these edge cases.
+
+Runtime acceptance remains pending until `gofmt`, `go test ./...`, `go vet ./...`, CLI build, bounded fuzz smoke testing, and GitHub Actions can execute. GitHub Actions currently returns `startup_failure` before a workflow job is created, so that infrastructure failure is tracked separately and is not treated as a passing CI result.
 
 ## Step 3 acceptance record
 
-Step 3 implementation is complete. The parser and AST now provide the structural syntax foundation required by later semantic phases.
+Step 3 has completed a deep source audit and corrective pass. The parser and AST provide the structural syntax foundation required by later semantic phases.
 
 Implemented coverage:
 
@@ -89,6 +95,7 @@ Implemented coverage:
 - binary expressions and precedence climbing
 - right-associative exponentiation
 - assignment and compound assignment expressions
+- right-associative assignment parsing
 - conditional expressions
 - function calls and ordered arguments
 - function declarations and parameters
@@ -98,17 +105,21 @@ Implemented coverage:
 - if and else blocks
 - arrays and array elements
 - object literals and properties
-- member access and index access
+- required and optional member access
+- index access
 - trailing commas in supported delimited constructs
 - assignment-target validation
 - structured parser diagnostics
-- statement and object recovery
+- statement, object, and stray-brace recovery
 - Unicode identifiers including Bengali and Hindi
 - compiler-session parser integration
 - regression and acceptance tests
+- AST span invariant tests
 - parser and AST documentation
 
-Step 3 runtime acceptance is currently blocked only by repository execution infrastructure. The repository's GitHub Actions workflow is registered as `BuildFailed` and currently ends with `startup_failure` before creating a job. The implementation itself is not being marked runtime-validated until `gofmt`, `go test ./...`, `go vet ./...`, CLI build, and CI execution can run successfully.
+Deep audit fixes include preserving `?.` in `MemberExpr.Optional`, hardening parser forward progress for stray top-level braces, and removing a duplicate `Session.ParseFile` method that would prevent the compiler package from building. Documentation now matches the optional member-access AST contract.
+
+Runtime acceptance remains blocked until `gofmt`, `go test ./...`, `go vet ./...`, CLI build, and GitHub Actions can execute successfully. The latest Actions run still ends in `startup_failure` before a job is created.
 
 ## Completion rule
 
