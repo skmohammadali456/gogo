@@ -72,3 +72,22 @@ func TestRendererJSONUsesStableSchema(t *testing.T) {
 		t.Fatalf("unexpected JSON schema: %#v", got)
 	}
 }
+
+func TestRendererJSONPreservesFallbackFilePathsForUnregisteredFiles(t *testing.T) {
+	span := source.Span{Start: source.NewPosition(), End: source.NewPosition()}
+	d := Diagnostic{Severity: Error, FilePath: "bad-utf8.gogo", Code: "G0002", Message: "This source file is not valid UTF-8 or has invalid source metadata.", Span: span}
+	data, err := (Renderer{Files: source.NewFileMap(), Locale: Bengali}).JSON([]Diagnostic{d})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []JSONDiagnostic
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, data)
+	}
+	if len(got) != 1 || got[0].Code != "G0002" || got[0].File != "bad-utf8.gogo" || got[0].Language != Bengali || got[0].Span.Start.Line != 1 || got[0].Span.Start.Column != 1 || got[0].Labels[0].File != "bad-utf8.gogo" {
+		t.Fatalf("unexpected fallback-file JSON: %#v", got)
+	}
+	if !strings.Contains(got[0].Message, "UTF-8") {
+		t.Fatalf("technical token UTF-8 should not be translated away: %q", got[0].Message)
+	}
+}

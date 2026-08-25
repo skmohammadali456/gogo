@@ -6,8 +6,8 @@
 - Compiler implementation language: Go
 - Repository: `skmohammadali786/gogo`
 - Release target: GOGO 1.0
-- Completed work packages: 3 / 62
-- Current work package: 4, Compiler diagnostics
+- Completed work packages: 4 / 62
+- Current work package: 5, pending
 - Status: Steps 1, 2, and 3 have completed a deep source audit and corrective pass. Runtime acceptance remains blocked because GitHub Actions currently ends in `startup_failure` before creating a job.
 
 ## Step 1, Compiler source model and positions
@@ -38,7 +38,7 @@ Deep audit fixes completed:
 - Step 2 tests now cover these edge cases.
 - Lexer documentation now matches the hardened numeric and Unicode escape contract.
 
-The remaining release gate is execution of `gofmt`, `go test ./...`, `go vet ./...`, `go build ./cmd/gogo`, bounded lexer fuzz smoke testing, and GitHub Actions.
+Local validation now includes `gofmt`, `go test ./...`, `go vet ./...`, `go build ./cmd/gogo`, and bounded fuzz-target smoke testing. The remaining external release gate is GitHub Actions availability.
 
 ## Step 3, Parser and AST
 
@@ -89,9 +89,11 @@ The acceptance suite covers optional member access, all supported assignment ope
 
 ## Step 4, Compiler diagnostics
 
-Status: **IMPLEMENTED, RUNTIME VALIDATION PENDING**
+Status: **IMPLEMENTATION AUDITED AND RUNTIME VALIDATED**
 
-Step 4 adds the shared diagnostic subsystem used by lexer, parser, compiler sessions, and the CLI. Diagnostics now have stable codes, severity levels, source spans, primary labels, notes, hints, suggestions, fix-it edit data, deterministic ordering, deduplication, human-friendly snippet and caret rendering, multiline and UTF-8-safe position support, JSON output, and English/Bengali/Hindi rendering hooks.
+Step 4 adds the shared diagnostic subsystem used by lexer, parser, compiler sessions, and the CLI. Diagnostics now have stable codes, severity levels, source spans, primary and secondary labels, notes, hints, suggestions, fix-it edit data, deterministic ordering, deduplication, human-friendly snippet and caret rendering, multiline and UTF-8-safe position support, structured JSON output, fallback file paths for unregistered file diagnostics, and English/Bengali/Hindi rendering hooks.
+
+Runtime validation completed locally on 2026-08-25 with `gofmt -l .`, `go test ./...`, `go vet ./...`, `go build ./cmd/gogo`, and `go test -race ./...`.
 
 ## Runtime validation gate
 

@@ -4,7 +4,7 @@ GOGO Step 4 promotes diagnostics to a compiler subsystem shared by lexer, parser
 
 ## Model
 
-A diagnostic has a stable `G` code registered in the diagnostic catalog, severity (`error`, `warning`, `info`, or `hint`), an English base message, file identity, a primary source span, labels, notes, hints, suggestions, and optional fix-it edits. Spans remain half-open byte ranges backed by UTF-8-safe line and column positions from the source package.
+A diagnostic has a stable `G` code registered in the diagnostic catalog, severity (`error`, `warning`, `info`, or `hint`), an English base message, file identity or fallback file path, a primary source span, labels, notes, hints, suggestions, and optional fix-it edits. Spans remain half-open byte ranges backed by UTF-8-safe line and column positions from the source package.
 
 ## Rendering
 
@@ -16,7 +16,7 @@ Human output is deterministic and includes:
 - Carets under the primary span, including multiline spans.
 - Notes, hints, and suggestions.
 
-JSON output serializes the same ordered and deduplicated model for editor and build-server integrations.
+JSON output serializes the same ordered and deduplicated model for editor and build-server integrations, including code, severity, language, file, start/end offsets, line/column positions, labels, notes, hints, suggestions, and fix-it edits.
 
 ## Language support
 
@@ -58,6 +58,7 @@ This subsystem implements the Step 4 requirements as follows:
 22. JSON diagnostic output: `gogo -json file.gogo` prints structured diagnostics.
 23. Deterministic diagnostic ordering: bags sort by file, span, and code.
 24. Diagnostic deduplication: duplicate diagnostics are emitted once.
-25. Golden diagnostic tests: multiline rendering has a checked golden fixture.
-26. English/Bengali/Hindi regression tests: tests exercise all three rendering locales.
-27. Documentation: this document is the Step 4 diagnostic contract.
+25. Malformed file diagnostics: session and CLI diagnostics preserve fallback file paths and stable line/column 1:1 locations even when a file cannot be registered.
+26. Golden diagnostic tests: multiline rendering has a checked golden fixture.
+27. English/Bengali/Hindi regression tests: tests exercise all three rendering locales.
+28. Documentation: this document is the Step 4 diagnostic contract.

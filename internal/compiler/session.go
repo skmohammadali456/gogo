@@ -17,11 +17,11 @@ func NewSession() *Session { return &Session{Files: source.NewFileMap()} }
 
 func (s *Session) AddFile(path, text string) uint32 {
 	if !source.ValidatePath(path) {
-		s.Diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G0001", Message: "I need a source file path before I can compile this file.", Hint: "Give the source file a non-empty path, such as main.gogo."})
+		s.Diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G0001", Message: "I need a source file path before I can compile this file.", Hint: "Give the source file a non-empty path, such as main.gogo.", FilePath: path, Span: source.Span{Start: source.NewPosition(), End: source.NewPosition()}})
 		return 0
 	}
 	if !source.ValidateFile(source.File{ID: 1, Path: path, Text: text}) {
-		s.Diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G0002", Message: "This source file is not valid UTF-8 or has invalid source metadata.", Hint: "Save the file as UTF-8 and make sure its path is valid."})
+		s.Diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G0002", Message: "This source file is not valid UTF-8 or has invalid source metadata.", Hint: "Save the file as UTF-8 and make sure its path is valid.", FilePath: path, Span: source.Span{Start: source.NewPosition(), End: source.NewPosition()}})
 		return 0
 	}
 	return s.Files.Add(path, text)
@@ -30,7 +30,7 @@ func (s *Session) AddFile(path, text string) uint32 {
 func (s *Session) LexFile(id uint32) []token.Token {
 	file, ok := s.Files.Get(id)
 	if !ok {
-		s.Diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G0003", Message: "The compiler cannot lex a source file that is not in this session.", Hint: "Add the file to the compilation session before lexing it."})
+		s.Diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G0003", Message: "The compiler cannot lex a source file that is not in this session.", Hint: "Add the file to the compilation session before lexing it.", Span: source.Span{Start: source.NewPosition(), End: source.NewPosition()}})
 		return nil
 	}
 	l := lexer.New(file)
