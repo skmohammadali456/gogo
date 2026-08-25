@@ -35,10 +35,12 @@ func TestParseArraysObjectsMembersAndIndexes(t *testing.T) {
 	array, ok := file.Statements[0].(ast.ExprStmt).Expression.(ast.ArrayExpr)
 	if !ok || len(array.Items) != 3 { t.Fatalf("unexpected array AST: %#v", file.Statements[0]) }
 
-	p, file = parseStep3(`{name: "Alex", age: 20}`)
+	p, file = parseStep3(`create variable data as {name: "Alex", age: 20}`)
 	if len(p.Diagnostics()) != 0 { t.Fatalf("unexpected object diagnostics: %v", p.Diagnostics()) }
-	object, ok := file.Statements[0].(ast.ExprStmt).Expression.(ast.ObjectExpr)
-	if !ok || len(object.Properties) != 2 { t.Fatalf("unexpected object AST: %#v", file.Statements[0]) }
+	decl, ok := file.Statements[0].(ast.VariableDecl)
+	if !ok { t.Fatalf("expected variable declaration, got %#v", file.Statements[0]) }
+	object, ok := decl.Value.(ast.ObjectExpr)
+	if !ok || len(object.Properties) != 2 { t.Fatalf("unexpected object AST: %#v", decl.Value) }
 }
 
 func TestParseMultilingualFunctionNamesAndParameters(t *testing.T) {
