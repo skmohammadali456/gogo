@@ -23,18 +23,17 @@ func (ObjectExpr) node() {}
 func (ObjectExpr) expr() {}
 
 type MemberExpr struct {
-	Span     source.Span
-	Object   Expr
-	Name     string
-	Optional bool
+	Span   source.Span
+	Object Expr
+	Name   string
 }
 func (MemberExpr) node() {}
 func (MemberExpr) expr() {}
 
 type IndexExpr struct {
-	Span  source.Span
+	Span   source.Span
 	Object Expr
-	Index Expr
+	Index  Expr
 }
 func (IndexExpr) node() {}
 func (IndexExpr) expr() {}
