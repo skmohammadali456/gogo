@@ -3,9 +3,9 @@ package parser
 import (
 	"testing"
 
-	"github.com/skmohammadali/gogo/internal/ast"
-	"github.com/skmohammadali/gogo/internal/lexer"
-	"github.com/skmohammadali/gogo/internal/source"
+	"github.com/skmohammadali786/gogo/internal/ast"
+	"github.com/skmohammadali786/gogo/internal/lexer"
+	"github.com/skmohammadali786/gogo/internal/source"
 )
 
 func parseStep3Complete(text string) (*Parser, ast.File) {
