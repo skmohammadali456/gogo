@@ -23,9 +23,10 @@ func (ObjectExpr) node() {}
 func (ObjectExpr) expr() {}
 
 type MemberExpr struct {
-	Span   source.Span
-	Object Expr
-	Name   string
+	Span     source.Span
+	Object   Expr
+	Name     string
+	Optional bool
 }
 func (MemberExpr) node() {}
 func (MemberExpr) expr() {}
