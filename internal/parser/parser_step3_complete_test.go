@@ -32,14 +32,31 @@ func TestStep3RightAssociativeOperators(t *testing.T) {
 	if _, ok := root.Right.(ast.BinaryExpr); !ok { t.Fatalf("expected right associative exponentiation, got %#v", root.Right) }
 }
 
+func TestStep3RightAssociativeAssignment(t *testing.T) {
+	p, file := parseStep3Complete(`a = b = c`)
+	if len(p.Diagnostics()) != 0 { t.Fatalf("unexpected diagnostics: %v", p.Diagnostics()) }
+	root := file.Statements[0].(ast.ExprStmt).Expression.(ast.AssignmentExpr)
+	if root.Operator != "=" { t.Fatalf("unexpected root operator: %s", root.Operator) }
+	if _, ok := root.Right.(ast.AssignmentExpr); !ok { t.Fatalf("expected right associative assignment, got %#v", root.Right) }
+}
+
 func TestStep3NestedPostfixExpressions(t *testing.T) {
 	p, file := parseStep3Complete(`[1, 2, 3][0].name(42)`)
 	if len(p.Diagnostics()) != 0 { t.Fatalf("unexpected diagnostics: %v", p.Diagnostics()) }
 	call, ok := file.Statements[0].(ast.ExprStmt).Expression.(ast.CallExpr)
 	if !ok || len(call.Arguments) != 1 { t.Fatalf("expected call with one argument, got %#v", file.Statements[0]) }
 	member, ok := call.Callee.(ast.MemberExpr)
-	if !ok || member.Name != "name" { t.Fatalf("expected member access, got %#v", call.Callee) }
+	if !ok || member.Name != "name" || member.Optional { t.Fatalf("expected required member access, got %#v", call.Callee) }
 	if _, ok := member.Object.(ast.IndexExpr); !ok { t.Fatalf("expected index before member, got %#v", member.Object) }
+}
+
+func TestStep3OptionalMemberAccess(t *testing.T) {
+	p, file := parseStep3Complete(`user?.profile.name`)
+	if len(p.Diagnostics()) != 0 { t.Fatalf("unexpected diagnostics: %v", p.Diagnostics()) }
+	root := file.Statements[0].(ast.ExprStmt).Expression.(ast.MemberExpr)
+	if root.Name != "name" || root.Optional { t.Fatalf("unexpected root member: %#v", root) }
+	optional, ok := root.Object.(ast.MemberExpr)
+	if !ok || !optional.Optional || optional.Name != "profile" { t.Fatalf("expected optional profile access, got %#v", root.Object) }
 }
 
 func TestStep3AssignmentTargetDiagnostic(t *testing.T) {
@@ -51,6 +68,12 @@ func TestStep3MalformedCollectionsRecover(t *testing.T) {
 	p, file := parseStep3Complete(`create variable broken as [1, 2; create variable good as 3`)
 	if len(p.Diagnostics()) == 0 { t.Fatal("expected diagnostics for malformed array") }
 	if len(file.Statements) < 1 { t.Fatal("parser should retain recoverable statements") }
+}
+
+func TestStep3StrayClosingBraceDoesNotHang(t *testing.T) {
+	p, file := parseStep3Complete(`} create variable good as 3`)
+	if len(p.Diagnostics()) == 0 || p.Diagnostics()[0].Code != "G2034" { t.Fatalf("expected G2034, got %v", p.Diagnostics()) }
+	if len(file.Statements) != 1 { t.Fatalf("expected parser to continue after stray brace, got %d statements", len(file.Statements)) }
 }
 
 func TestStep3FunctionTrailingComma(t *testing.T) {
