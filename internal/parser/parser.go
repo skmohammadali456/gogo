@@ -98,7 +98,7 @@ func (p *Parser) parseVariable(start source.Position) ast.Stmt {
 	p.advance()
 	value := p.parseExpression(0)
 	if value == nil {
-		p.error("G2004", "I expected a value for this variable.", "Give the variable an initial value.")
+		p.error("G2004", "I expected a value after as.", "Give the variable an initial value.")
 		return nil
 	}
 	if p.at(token.Semicolon) {

@@ -16,6 +16,7 @@ const (
 	Info Severity = iota
 	Warning
 	Error
+	Hint
 )
 
 func (s Severity) String() string {
@@ -26,6 +27,8 @@ func (s Severity) String() string {
 		return "warning"
 	case Error:
 		return "error"
+	case Hint:
+		return "hint"
 	default:
 		return "unknown"
 	}
@@ -183,12 +186,91 @@ func (r Renderer) Text(diags []Diagnostic) string {
 	return b.String()
 }
 
+type JSONPosition struct {
+	Offset int `json:"offset"`
+	Line   int `json:"line"`
+	Column int `json:"column"`
+}
+
+type JSONSpan struct {
+	Start JSONPosition `json:"start"`
+	End   JSONPosition `json:"end"`
+}
+
+type JSONLabel struct {
+	Style   LabelStyle `json:"style"`
+	File    string     `json:"file,omitempty"`
+	Span    JSONSpan   `json:"span"`
+	Message string     `json:"message,omitempty"`
+}
+
+type JSONFixIt struct {
+	File        string   `json:"file,omitempty"`
+	Span        JSONSpan `json:"span"`
+	Replacement string   `json:"replacement"`
+	Message     string   `json:"message,omitempty"`
+}
+
+type JSONSuggestion struct {
+	Message string      `json:"message"`
+	Edits   []JSONFixIt `json:"edits,omitempty"`
+}
+
+type JSONDiagnostic struct {
+	Code        string           `json:"code"`
+	Severity    string           `json:"severity"`
+	Language    Locale           `json:"language"`
+	Message     string           `json:"message"`
+	File        string           `json:"file,omitempty"`
+	Span        JSONSpan         `json:"span"`
+	Labels      []JSONLabel      `json:"labels,omitempty"`
+	Notes       []string         `json:"notes,omitempty"`
+	Hints       []string         `json:"hints,omitempty"`
+	Suggestions []JSONSuggestion `json:"suggestions,omitempty"`
+}
+
 func (r Renderer) JSON(diags []Diagnostic) ([]byte, error) {
 	out := orderedDeduped(diags)
-	for i := range out {
-		out[i] = translate(out[i].normalized(), r.Locale)
+	schema := make([]JSONDiagnostic, 0, len(out))
+	for _, d := range out {
+		d = translate(d.normalized(), r.Locale)
+		file, _ := r.fileText(d.FileID)
+		schema = append(schema, r.jsonDiagnostic(d, file))
 	}
-	return json.MarshalIndent(out, "", "  ")
+	return json.MarshalIndent(schema, "", "  ")
+}
+
+func (r Renderer) jsonDiagnostic(d Diagnostic, file string) JSONDiagnostic {
+	labels := make([]JSONLabel, 0, len(d.Labels))
+	for _, label := range d.Labels {
+		labelFile, _ := r.fileText(label.FileID)
+		labels = append(labels, JSONLabel{Style: label.Style, File: labelFile, Span: jsonSpan(label.Span), Message: label.Message})
+	}
+	suggestions := make([]JSONSuggestion, 0, len(d.Suggestions))
+	for _, suggestion := range d.Suggestions {
+		edits := make([]JSONFixIt, 0, len(suggestion.Edits))
+		for _, edit := range suggestion.Edits {
+			editFile, _ := r.fileText(edit.FileID)
+			edits = append(edits, JSONFixIt{File: editFile, Span: jsonSpan(edit.Span), Replacement: edit.Replacement, Message: edit.Message})
+		}
+		suggestions = append(suggestions, JSONSuggestion{Message: suggestion.Message, Edits: edits})
+	}
+	return JSONDiagnostic{Code: d.Code, Severity: d.Severity.String(), Language: localeOrEnglish(r.Locale), Message: d.Message, File: file, Span: jsonSpan(d.Span), Labels: labels, Notes: d.Notes, Hints: d.Hints, Suggestions: suggestions}
+}
+
+func jsonSpan(span source.Span) JSONSpan {
+	return JSONSpan{Start: jsonPosition(span.Start), End: jsonPosition(span.End)}
+}
+
+func jsonPosition(pos source.Position) JSONPosition {
+	return JSONPosition{Offset: pos.Offset, Line: pos.Line, Column: pos.Column}
+}
+
+func localeOrEnglish(locale Locale) Locale {
+	if locale == "" {
+		return English
+	}
+	return locale
 }
 
 func (r Renderer) fileText(id uint32) (string, string) {

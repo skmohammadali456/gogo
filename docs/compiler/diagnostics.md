@@ -4,7 +4,7 @@ GOGO Step 4 promotes diagnostics to a compiler subsystem shared by lexer, parser
 
 ## Model
 
-A diagnostic has a stable `G` code registered in the diagnostic catalog, severity (`info`, `warning`, or `error`), an English base message, file identity, a primary source span, labels, notes, hints, suggestions, and optional fix-it edits. Spans remain half-open byte ranges backed by UTF-8-safe line and column positions from the source package.
+A diagnostic has a stable `G` code registered in the diagnostic catalog, severity (`error`, `warning`, `info`, or `hint`), an English base message, file identity, a primary source span, labels, notes, hints, suggestions, and optional fix-it edits. Spans remain half-open byte ranges backed by UTF-8-safe line and column positions from the source package.
 
 ## Rendering
 
@@ -36,7 +36,7 @@ This subsystem implements the Step 4 requirements as follows:
 
 1. Diagnostic model: `Diagnostic`, `Label`, `Suggestion`, and `FixIt`.
 2. Stable diagnostic codes: the `Catalog` maps existing `G000x`, `G100x`, and `G200x` codes.
-3. Severity levels: `info`, `warning`, and `error`.
+3. Severity levels: `error`, `warning`, `info`, and `hint`.
 4. Source spans: every diagnostic carries a half-open `source.Span`.
 5. Primary labels: span-only diagnostics normalize to a primary label.
 6. Secondary labels: related label data can be attached and rendered.
