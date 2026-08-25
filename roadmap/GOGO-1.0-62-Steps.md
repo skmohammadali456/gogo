@@ -5,8 +5,8 @@ GOGO is being developed as a Go-powered, TypeScript-class frontend and UI progra
 | # | Work package | Status |
 |---:|---|---|
 | 1 | Compiler source model and positions | **Complete** |
-| 2 | Lexer and token model | **In progress** |
-| 3 | Parser and AST | Planned |
+| 2 | Lexer and token model | **Implementation complete, runtime validation pending** |
+| 3 | Parser and AST | **In progress** |
 | 4 | Compiler diagnostics | Planned |
 | 5 | Grammar abstraction | Planned |
 | 6 | English grammar | Planned |
@@ -71,15 +71,17 @@ GOGO is being developed as a Go-powered, TypeScript-class frontend and UI progra
 
 Step 1 is complete. It established the source foundation used by all later compiler phases: stable file identity, UTF-8 validation, byte offsets, line and column positions, source spans, Unicode cursor operations, source invariants, structured diagnostics, and compilation session integration. It also includes unit tests, multilingual test coverage, technical documentation, and CI configuration.
 
-A deep repository review found and corrected a missing source validation implementation and a duplicate validation implementation. The Go version was also aligned to Go 1.23 so the project can be validated with the available toolchain without downloading another toolchain.
-
-GitHub Actions is configured for formatting, tests, vet, and CLI build, but the Actions service has been returning `startup_failure` before creating a job. This infrastructure limitation is tracked separately and is not treated as a passing CI result.
-
 ## Step 2 acceptance record
 
-Step 2 is in progress. The lexer foundation now contains a canonical token kind model, source spans, Unicode identifier scanning, numbers, strings, punctuation, operators, whitespace handling, line and block comments, invalid-character recovery, lexer diagnostics, and tests.
+Step 2 implementation is complete. The lexer foundation contains a canonical token model, exact source text, source spans, Unicode identifiers, English/Bengali/Hindi lexical coverage, numeric literals, string literals and escape validation, operators, punctuation, whitespace, comments, recovery, malformed UTF-8 handling, human-readable diagnostics, compiler-session integration, regression tests, fuzz coverage, integration tests, and formal documentation.
 
-Remaining Step 2 acceptance work includes complete literal validation, lexer and compiler-session integration, fuzz and regression coverage, malformed UTF-8 lexer entry handling, documentation, and full repository validation.
+The only remaining Step 2 gate is runtime execution of formatting, tests, vet, CLI build, bounded fuzz smoke testing, and GitHub Actions. GitHub Actions has previously returned `startup_failure` before creating a job, so that infrastructure limitation is tracked separately and is not treated as a passing CI result.
+
+## Step 3 acceptance record
+
+Step 3 is in progress. The initial parser and AST foundation is committed. It currently supports source-spanned files, identifiers, literals, unary expressions, binary expressions with precedence, function calls, blocks, expression statements, variable declarations, return statements, parser diagnostics, error recovery, multilingual identifiers, parser tests, compiler-session integration, and parser documentation.
+
+Later Step 3 work will expand the structural grammar needed by functions, control flow, collections, object literals, and other GOGO constructs before Step 3 is accepted as complete.
 
 ## Completion rule
 
