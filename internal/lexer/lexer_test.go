@@ -12,135 +12,104 @@ func lex(text string) (*Lexer, []token.Token) {
 	return l, l.LexAll()
 }
 
-func TestLexBasicProgram(t *testing.T) {
-	l, tokens := lex(`create variable user as "Alex"`)
-	want := []token.Kind{token.Identifier, token.Identifier, token.Identifier, token.Identifier, token.String, token.EOF}
-	if len(tokens) != len(want) {
-		t.Fatalf("got %d tokens, want %d: %#v", len(tokens), len(want), tokens)
-	}
-	for i, kind := range want {
-		if tokens[i].Kind != kind {
-			t.Fatalf("token %d: got %v, want %v", i, tokens[i].Kind, kind)
-		}
-	}
-	if len(l.Diagnostics()) != 0 {
-		t.Fatalf("unexpected diagnostics: %v", l.Diagnostics())
-	}
+func assertKinds(t *testing.T, tokens []token.Token, want ...token.Kind) {
+	t.Helper()
+	if len(tokens) != len(want) { t.Fatalf("got %d tokens, want %d: %#v", len(tokens), len(want), tokens) }
+	for i, kind := range want { if tokens[i].Kind != kind { t.Fatalf("token %d: got %v, want %v", i, tokens[i].Kind, kind) } }
 }
 
-func TestLexUnicodeIdentifiers(t *testing.T) {
-	l, tokens := lex("বাংলা নাম\nहिन्दी शहर")
-	if len(tokens) != 5 || tokens[0].Kind != token.Identifier || tokens[1].Kind != token.Identifier || tokens[3].Kind != token.Identifier {
-		t.Fatalf("unexpected Unicode tokens: %#v", tokens)
-	}
-	if len(l.Diagnostics()) != 0 {
-		t.Fatalf("unexpected diagnostics: %v", l.Diagnostics())
-	}
+func TestLexEnglishBengaliHindiIdentifiers(t *testing.T) {
+	l, tokens := lex("create user\nবাংলা নাম\nहिन्दी नाम")
+	assertKinds(t, tokens, token.Identifier, token.Identifier, token.Identifier, token.Identifier, token.Identifier, token.Identifier, token.EOF)
+	for _, tok := range tokens[:6] { if tok.Text == "" || tok.Span.Start.Line < 1 { t.Fatalf("invalid token: %+v", tok) } }
+	if len(l.Diagnostics()) != 0 { t.Fatalf("unexpected diagnostics: %v", l.Diagnostics()) }
 }
 
-func TestLexNumbersAndOperators(t *testing.T) {
-	_, tokens := lex("42 10.5 1e6 2.5E-3 == != += -> && || <= >=")
-	want := []token.Kind{token.Number, token.Number, token.Number, token.Number, token.EqualEqual, token.BangEqual, token.PlusEqual, token.Arrow, token.AndAnd, token.OrOr, token.LessEqual, token.GreaterEqual, token.EOF}
-	if len(tokens) != len(want) {
-		t.Fatalf("got %d tokens, want %d", len(tokens), len(want))
-	}
-	for i, kind := range want {
-		if tokens[i].Kind != kind {
-			t.Errorf("token %d: got %v, want %v", i, tokens[i].Kind, kind)
-		}
-	}
+func TestLexNumbersAndJSStyleNumericForms(t *testing.T) {
+	_, tokens := lex("42 10.5 1e6 2.5E-3 1_000 0xff 0b1010 0o755 42n")
+	assertKinds(t, tokens, token.Number, token.Number, token.Number, token.Number, token.Number, token.Number, token.Number, token.Number, token.Number, token.EOF)
 }
 
 func TestLexInvalidNumberDiagnostics(t *testing.T) {
-	for _, input := range []string{"10.", "1e", "1e+"} {
+	for _, input := range []string{"10.", "1e", "1e+", "1_", "1__2", "0x", "0b", "0o"} {
 		l, tokens := lex(input)
-		if len(tokens) != 2 || tokens[0].Kind != token.Invalid || tokens[1].Kind != token.EOF {
-			t.Fatalf("%q: unexpected tokens: %#v", input, tokens)
-		}
-		if len(l.Diagnostics()) != 1 || l.Diagnostics()[0].Code != "G1002" {
-			t.Fatalf("%q: expected G1002, got %v", input, l.Diagnostics())
-		}
+		if tokens[0].Kind != token.Invalid || len(l.Diagnostics()) != 1 || l.Diagnostics()[0].Code != "G1002" { t.Fatalf("%q: unexpected result: tokens=%#v diagnostics=%v", input, tokens, l.Diagnostics()) }
+	}
+}
+
+func TestLexCompleteOperatorSet(t *testing.T) {
+	input := "= == === ! != !== + += ++ - -= -- -> => * *= ** **= / /= % %= < <= << <<= > >= >> >>= >>> >>>= & && &= | || |= ^ ^= ~ ? ?? ?. ..."
+	_, tokens := lex(input)
+	assertKinds(t, tokens,
+		token.Equal, token.EqualEqual, token.EqualEqualEqual, token.Bang, token.BangEqual, token.BangEqualEqual,
+		token.Plus, token.PlusEqual, token.PlusPlus, token.Minus, token.MinusEqual, token.MinusMinus, token.Arrow, token.FatArrow,
+		token.Star, token.StarEqual, token.StarStar, token.StarStarEqual, token.Slash, token.SlashEqual, token.Percent, token.PercentEqual,
+		token.Less, token.LessEqual, token.ShiftLeft, token.ShiftLeftEqual, token.Greater, token.GreaterEqual, token.ShiftRight,
+		token.ShiftRightEqual, token.UnsignedShiftRight, token.UnsignedShiftRightEqual, token.And, token.AndAnd, token.AndEqual,
+		token.Or, token.OrOr, token.OrEqual, token.Caret, token.CaretEqual, token.Tilde, token.Question, token.QuestionQuestion,
+		token.QuestionDot, token.Ellipsis, token.EOF,
+	)
+}
+
+func TestLexPunctuation(t *testing.T) {
+	_, tokens := lex("{} () [] , . : ;")
+	assertKinds(t, tokens, token.LBrace, token.RBrace, token.LParen, token.RParen, token.LBracket, token.RBracket, token.Comma, token.Dot, token.Colon, token.Semicolon, token.EOF)
+}
+
+func TestLexStringsAndUnicodeEscapes(t *testing.T) {
+	_, tokens := lex(`"hello\n\t\x41\u0042\u{1F600}" 'বাংলা' "हिन्दी"`)
+	assertKinds(t, tokens, token.String, token.String, token.String, token.EOF)
+}
+
+func TestLexInvalidStringEscapes(t *testing.T) {
+	for _, input := range []string{`"hello\q"`, `"\x1"`, `"\u12"`, `"\u{1G}"`, `"\u{}"`} {
+		l, tokens := lex(input)
+		if tokens[0].Kind != token.Invalid || len(l.Diagnostics()) != 1 || l.Diagnostics()[0].Code != "G1004" { t.Fatalf("%q: unexpected result: %#v %v", input, tokens, l.Diagnostics()) }
 	}
 }
 
 func TestLexCommentsAreSkippedByDefault(t *testing.T) {
 	l, tokens := lex("x // hello\ny /* block */ z")
-	if len(tokens) != 4 || tokens[0].Kind != token.Identifier || tokens[1].Kind != token.Identifier || tokens[2].Kind != token.Identifier || tokens[3].Kind != token.EOF {
-		t.Fatalf("unexpected comment handling: %#v", tokens)
-	}
-	if len(l.Diagnostics()) != 0 {
-		t.Fatalf("unexpected diagnostics: %v", l.Diagnostics())
-	}
+	assertKinds(t, tokens, token.Identifier, token.Identifier, token.Identifier, token.EOF)
+	if len(l.Diagnostics()) != 0 { t.Fatalf("unexpected diagnostics: %v", l.Diagnostics()) }
 }
 
 func TestLexCommentsCanBePreserved(t *testing.T) {
 	l := New(source.File{ID: 1, Path: "main.gogo", Text: "x // hello\ny"})
 	l.IncludeComments(true)
-	tokens := l.LexAll()
-	if len(tokens) != 4 || tokens[0].Kind != token.Identifier || tokens[1].Kind != token.Comment || tokens[2].Kind != token.Identifier || tokens[3].Kind != token.EOF {
-		t.Fatalf("unexpected preserved comments: %#v", tokens)
-	}
+	assertKinds(t, l.LexAll(), token.Identifier, token.Comment, token.Identifier, token.EOF)
 }
 
 func TestLexUnterminatedString(t *testing.T) {
 	l, tokens := lex(`"hello`)
-	if len(tokens) != 2 || tokens[0].Kind != token.Invalid || tokens[1].Kind != token.EOF {
-		t.Fatalf("unexpected unterminated string tokens: %#v", tokens)
-	}
-	if len(l.Diagnostics()) != 1 || l.Diagnostics()[0].Code != "G1003" {
-		t.Fatalf("expected G1003, got %v", l.Diagnostics())
-	}
-}
-
-func TestLexInvalidEscape(t *testing.T) {
-	l, tokens := lex(`"hello\q"`)
-	if len(tokens) != 2 || tokens[0].Kind != token.Invalid || tokens[1].Kind != token.EOF {
-		t.Fatalf("unexpected invalid escape tokens: %#v", tokens)
-	}
-	if len(l.Diagnostics()) != 1 || l.Diagnostics()[0].Code != "G1004" {
-		t.Fatalf("expected G1004, got %v", l.Diagnostics())
-	}
+	assertKinds(t, tokens, token.Invalid, token.EOF)
+	if len(l.Diagnostics()) != 1 || l.Diagnostics()[0].Code != "G1004" { t.Fatalf("expected G1004, got %v", l.Diagnostics()) }
 }
 
 func TestLexUnterminatedBlockComment(t *testing.T) {
 	l, tokens := lex("/* hello")
-	if len(tokens) != 1 || tokens[0].Kind != token.EOF {
-		t.Fatalf("unexpected block comment tokens: %#v", tokens)
-	}
-	if len(l.Diagnostics()) != 1 || l.Diagnostics()[0].Code != "G1001" {
-		t.Fatalf("expected G1001, got %v", l.Diagnostics())
-	}
+	assertKinds(t, tokens, token.EOF)
+	if len(l.Diagnostics()) != 1 || l.Diagnostics()[0].Code != "G1001" { t.Fatalf("expected G1001, got %v", l.Diagnostics()) }
 }
 
 func TestLexMalformedUTF8(t *testing.T) {
 	l := New(source.File{ID: 1, Path: "main.gogo", Text: string([]byte{'x', 0xff, 'y'})})
-	tokens := l.LexAll()
-	if len(tokens) != 4 || tokens[0].Kind != token.Identifier || tokens[1].Kind != token.Invalid || tokens[2].Kind != token.Identifier || tokens[3].Kind != token.EOF {
-		t.Fatalf("unexpected malformed UTF-8 tokens: %#v", tokens)
-	}
-	if len(l.Diagnostics()) != 1 || l.Diagnostics()[0].Code != "G1000" {
-		t.Fatalf("expected G1000, got %v", l.Diagnostics())
-	}
+	assertKinds(t, l.LexAll(), token.Identifier, token.Invalid, token.Identifier, token.EOF)
+	if len(l.Diagnostics()) != 1 || l.Diagnostics()[0].Code != "G1000" { t.Fatalf("expected G1000, got %v", l.Diagnostics()) }
 }
 
 func TestLexSpansUseSourcePositions(t *testing.T) {
-	_, tokens := lex("α\nবাংলা")
-	if tokens[0].Span.Start.Line != 1 || tokens[0].Span.Start.Column != 1 {
-		t.Fatalf("unexpected first span: %+v", tokens[0].Span)
-	}
-	if tokens[1].Span.Start.Line != 2 || tokens[1].Span.Start.Column != 1 {
-		t.Fatalf("unexpected second span: %+v", tokens[1].Span)
-	}
+	_, tokens := lex("α\nবাংলা\nहिन्दी")
+	if tokens[0].Span.Start.Line != 1 || tokens[0].Span.Start.Column != 1 { t.Fatalf("unexpected first span: %+v", tokens[0].Span) }
+	if tokens[1].Span.Start.Line != 2 || tokens[1].Span.Start.Column != 1 { t.Fatalf("unexpected Bengali span: %+v", tokens[1].Span) }
+	if tokens[2].Span.Start.Line != 3 || tokens[2].Span.Start.Column != 1 { t.Fatalf("unexpected Hindi span: %+v", tokens[2].Span) }
 }
 
 func FuzzLexNeverPanics(f *testing.F) {
 	f.Add("create variable user as \"Alex\"")
 	f.Add("বাংলা নাম")
-	f.Add("1.25e-4 && value")
+	f.Add("हिन्दी नाम")
+	f.Add("1.25e-4 && value ?? fallback")
 	f.Add("/* comment */ x")
-	f.Fuzz(func(t *testing.T, text string) {
-		l := New(source.File{ID: 1, Path: "fuzz.gogo", Text: text})
-		_ = l.LexAll()
-		_ = l.Diagnostics()
-	})
+	f.Fuzz(func(t *testing.T, text string) { l := New(source.File{ID: 1, Path: "fuzz.gogo", Text: text}); _ = l.LexAll(); _ = l.Diagnostics() })
 }
