@@ -6,7 +6,7 @@ GOGO is being developed as a Go-powered, TypeScript-class frontend and UI progra
 |---:|---|---|
 | 1 | Compiler source model and positions | **Complete** |
 | 2 | Lexer and token model | **Implementation complete, runtime validation pending** |
-| 3 | Parser and AST | **In progress** |
+| 3 | Parser and AST | **Implementation complete, runtime validation blocked** |
 | 4 | Compiler diagnostics | Planned |
 | 5 | Grammar abstraction | Planned |
 | 6 | English grammar | Planned |
@@ -75,13 +75,40 @@ Step 1 is complete. It established the source foundation used by all later compi
 
 Step 2 implementation is complete. The lexer foundation contains a canonical token model, exact source text, source spans, Unicode identifiers, English/Bengali/Hindi lexical coverage, numeric literals, string literals and escape validation, operators, punctuation, whitespace, comments, recovery, malformed UTF-8 handling, human-readable diagnostics, compiler-session integration, regression tests, fuzz coverage, integration tests, and formal documentation.
 
-The only remaining Step 2 gate is runtime execution of formatting, tests, vet, CLI build, bounded fuzz smoke testing, and GitHub Actions. GitHub Actions has previously returned `startup_failure` before creating a job, so that infrastructure limitation is tracked separately and is not treated as a passing CI result.
+The only remaining Step 2 gate is runtime execution of formatting, tests, vet, CLI build, bounded fuzz smoke testing, and GitHub Actions. GitHub Actions currently returns `startup_failure` before a workflow job is created, so this infrastructure failure is tracked separately and is not treated as a passing CI result.
 
 ## Step 3 acceptance record
 
-Step 3 is in progress. The initial parser and AST foundation is committed. It currently supports source-spanned files, identifiers, literals, unary expressions, binary expressions with precedence, function calls, blocks, expression statements, variable declarations, return statements, parser diagnostics, error recovery, multilingual identifiers, parser tests, compiler-session integration, and parser documentation.
+Step 3 implementation is complete. The parser and AST now provide the structural syntax foundation required by later semantic phases.
 
-Later Step 3 work will expand the structural grammar needed by functions, control flow, collections, object literals, and other GOGO constructs before Step 3 is accepted as complete.
+Implemented coverage:
+
+- source-spanned AST nodes
+- identifiers and literals
+- unary expressions
+- binary expressions and precedence climbing
+- right-associative exponentiation
+- assignment and compound assignment expressions
+- conditional expressions
+- function calls and ordered arguments
+- function declarations and parameters
+- blocks and expression statements
+- GOGO variable declarations
+- return statements
+- if and else blocks
+- arrays and array elements
+- object literals and properties
+- member access and index access
+- trailing commas in supported delimited constructs
+- assignment-target validation
+- structured parser diagnostics
+- statement and object recovery
+- Unicode identifiers including Bengali and Hindi
+- compiler-session parser integration
+- regression and acceptance tests
+- parser and AST documentation
+
+Step 3 runtime acceptance is currently blocked only by repository execution infrastructure. The repository's GitHub Actions workflow is registered as `BuildFailed` and currently ends with `startup_failure` before creating a job. The implementation itself is not being marked runtime-validated until `gofmt`, `go test ./...`, `go vet ./...`, CLI build, and CI execution can run successfully.
 
 ## Completion rule
 
