@@ -15,7 +15,7 @@ func TestValidatePath(t *testing.T) {
 	}
 }
 
-func TestValidateFile(t *testing.T) {
+func TestValidateFileEncodingAndMetadata(t *testing.T) {
 	valid := File{ID: 1, Path: "main.gogo", Text: "create variable x as \"বাংলা\""}
 	if !ValidateFile(valid) {
 		t.Fatal("expected valid UTF-8 source file")
