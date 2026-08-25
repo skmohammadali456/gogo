@@ -68,6 +68,12 @@ func (p *Parser) parseStatement() ast.Stmt {
 	if p.atKeyword(grammar.KeywordCreate) {
 		return p.parseCreate()
 	}
+	if p.atKeyword(grammar.KeywordVariable) || p.atKeyword(grammar.KeywordConstant) || p.atKeyword(grammar.KeywordFunction) {
+		return p.parseConciseCreate()
+	}
+	if p.atKeyword(grammar.KeywordImport) {
+		return p.parseImport()
+	}
 	if p.atKeyword(grammar.KeywordReturn) {
 		return p.parseReturn()
 	}
@@ -81,8 +87,8 @@ func (p *Parser) parseStatement() ast.Stmt {
 	if expr == nil {
 		return nil
 	}
-	if p.at(token.Semicolon) {
-		p.advance()
+	if p.canEndStatement(expr) {
+		p.consumeTerminator()
 	} else if !p.at(token.EOF) && !p.at(token.RBrace) {
 		p.error("G2035", "I found extra tokens after this expression statement.", "Separate statements with semicolons or write a complete declaration/control-flow form for the selected grammar.")
 		p.recoverStatement()
@@ -98,9 +104,23 @@ func (p *Parser) parseCreate() ast.Stmt {
 	if p.atKeyword(grammar.KeywordFunction) {
 		return p.parseFunction(start)
 	}
-	p.error("G2001", "I expected 'variable' or 'function' after 'create'.", "Write create variable name as value, or create function name(...).")
+	if p.atKeyword(grammar.KeywordConstant) {
+		return p.parseVariable(start)
+	}
+	if p.atKeyword(grammar.KeywordComponent) {
+		return p.parseComponent(start)
+	}
+	p.error("G2001", "I expected a declaration keyword after 'create'.", "Write create variable name as value, create function name(...), or create component Name { ... }.")
 	p.recoverStatement()
 	return nil
+}
+
+func (p *Parser) parseConciseCreate() ast.Stmt {
+	start := p.current().Span.Start
+	if p.atKeyword(grammar.KeywordFunction) {
+		return p.parseFunction(start)
+	}
+	return p.parseVariable(start)
 }
 
 func (p *Parser) parseVariable(start source.Position) ast.Stmt {
@@ -115,15 +135,19 @@ func (p *Parser) parseVariable(start source.Position) ast.Stmt {
 		return nil
 	}
 	p.advance()
+	var typ *ast.TypeRef
+	if p.looksLikeTypeThenAs() {
+		t := p.parseType()
+		typ = &t
+		p.advance() // consume initializer as
+	}
 	value := p.parseExpression(0)
 	if value == nil {
 		p.error("G2004", "I expected a value after as.", "Give the variable an initial value.")
 		return nil
 	}
-	if p.at(token.Semicolon) {
-		p.advance()
-	}
-	return ast.VariableDecl{Span: source.Span{Start: start, End: ast.SpanOf(value).End}, Name: ast.Identifier{Span: name.Span, Name: name.Text}, Value: value}
+	p.consumeTerminator()
+	return ast.VariableDecl{Span: source.Span{Start: start, End: ast.SpanOf(value).End}, Name: ast.Identifier{Span: name.Span, Name: name.Text}, Type: typ, Value: value}
 }
 
 func (p *Parser) parseFunction(start source.Position) ast.Stmt {
@@ -140,6 +164,7 @@ func (p *Parser) parseFunction(start source.Position) ast.Stmt {
 	}
 	p.advance()
 	var params []ast.Identifier
+	var paramTypes []*ast.TypeRef
 	if !p.at(token.RParen) {
 		for {
 			param := p.expect(token.Identifier, "G2013", "I expected a parameter name.", "Give each parameter a name.")
@@ -148,6 +173,13 @@ func (p *Parser) parseFunction(start source.Position) ast.Stmt {
 				return nil
 			}
 			params = append(params, ast.Identifier{Span: param.Span, Name: param.Text})
+			if p.atKeyword(grammar.KeywordAs) {
+				p.advance()
+				t := p.parseType()
+				paramTypes = append(paramTypes, &t)
+			} else {
+				paramTypes = append(paramTypes, nil)
+			}
 			if !p.at(token.Comma) {
 				break
 			}
@@ -163,11 +195,17 @@ func (p *Parser) parseFunction(start source.Position) ast.Stmt {
 		return nil
 	}
 	p.advance()
+	var returnType *ast.TypeRef
+	if p.atKeyword(grammar.KeywordAs) {
+		p.advance()
+		t := p.parseType()
+		returnType = &t
+	}
 	body, ok := p.parseBlockRequired("G2015", "I expected a function body.", "Add { ... } after the function declaration.")
 	if !ok {
 		return nil
 	}
-	return ast.FunctionDecl{Span: source.Span{Start: start, End: body.Span.End}, Name: ast.Identifier{Span: name.Span, Name: name.Text}, Parameters: params, Body: body}
+	return ast.FunctionDecl{Span: source.Span{Start: start, End: body.Span.End}, Name: ast.Identifier{Span: name.Span, Name: name.Text}, Parameters: params, ParameterTypes: paramTypes, ReturnType: returnType, Body: body}
 }
 
 func (p *Parser) parseIf() ast.Stmt {
@@ -208,9 +246,7 @@ func (p *Parser) parseReturn() ast.Stmt {
 		p.error("G2005", "I expected a value after 'return'.", "Return a value or use a grammar form that explicitly permits an empty return.")
 		return nil
 	}
-	if p.at(token.Semicolon) {
-		p.advance()
-	}
+	p.consumeTerminator()
 	return ast.ReturnStmt{Span: source.Span{Start: start, End: ast.SpanOf(value).End}, Value: value}
 }
 
@@ -572,4 +608,109 @@ func (p *Parser) recoverStatement() {
 	if p.at(token.Semicolon) {
 		p.advance()
 	}
+}
+
+func (p *Parser) parseImport() ast.Stmt {
+	start := p.advance().Span.Start
+	path := p.expect(token.String, "G2036", "I expected a quoted module path after import.", "Write import \"module\" or import \"module\" as alias.")
+	if path.Kind == token.Invalid {
+		p.recoverStatement()
+		return nil
+	}
+	var alias *ast.Identifier
+	if p.atKeyword(grammar.KeywordAs) {
+		p.advance()
+		name := p.expect(token.Identifier, "G2037", "I expected an import alias after as.", "Add an identifier for the imported module alias.")
+		if name.Kind == token.Invalid {
+			p.recoverStatement()
+			return nil
+		}
+		alias = &ast.Identifier{Span: name.Span, Name: name.Text}
+	}
+	end := path.Span.End
+	if alias != nil {
+		end = alias.Span.End
+	}
+	p.consumeTerminator()
+	return ast.ImportDecl{Span: source.Span{Start: start, End: end}, Path: path.Text, Alias: alias}
+}
+
+func (p *Parser) parseComponent(start source.Position) ast.Stmt {
+	p.advance()
+	name := p.expect(token.Identifier, "G2038", "I expected a component name.", "Give the component a name.")
+	if name.Kind == token.Invalid {
+		p.recoverStatement()
+		return nil
+	}
+	var props []ast.ComponentProp
+	if p.at(token.LParen) {
+		p.advance()
+		for !p.at(token.RParen) && !p.at(token.EOF) {
+			prop := p.expect(token.Identifier, "G2039", "I expected a component property name.", "Write properties as name as value.")
+			if prop.Kind == token.Invalid {
+				p.recoverStatement()
+				return nil
+			}
+			if !p.atKeyword(grammar.KeywordAs) {
+				p.error("G2040", "I expected as after the component property name.", "Write properties as name as value.")
+				p.recoverStatement()
+				return nil
+			}
+			p.advance()
+			value := p.parseExpression(0)
+			if value == nil {
+				p.error("G2041", "I expected a component property value.", "Add an expression after as.")
+				p.recoverStatement()
+				return nil
+			}
+			props = append(props, ast.ComponentProp{Span: source.Span{Start: prop.Span.Start, End: ast.SpanOf(value).End}, Name: prop.Text, Value: value})
+			if !p.at(token.Comma) {
+				break
+			}
+			p.advance()
+		}
+		p.expect(token.RParen, "G2042", "This component property list is missing a closing parenthesis.", "Add ) after the properties.")
+	}
+	body, ok := p.parseBlockRequired("G2043", "I expected a component body.", "Add { ... } after the component declaration.")
+	if !ok {
+		return nil
+	}
+	return ast.ComponentDecl{Span: source.Span{Start: start, End: body.Span.End}, Name: ast.Identifier{Span: name.Span, Name: name.Text}, Properties: props, Body: body}
+}
+
+func (p *Parser) canEndStatement(expr ast.Expr) bool {
+	if p.at(token.Semicolon) || p.at(token.EOF) || p.at(token.RBrace) {
+		return true
+	}
+	return ast.SpanOf(expr).End.Line < p.current().Span.Start.Line
+}
+
+func (p *Parser) consumeTerminator() {
+	if p.at(token.Semicolon) {
+		p.advance()
+	}
+}
+
+func (p *Parser) looksLikeTypeThenAs() bool {
+	if p.pos+1 >= len(p.tokens) || p.current().Kind != token.Identifier {
+		return false
+	}
+	next := p.tokens[p.pos+1]
+	kw, ok := p.vocabulary.Lookup(next.Text)
+	return next.Kind == token.Identifier && ok && kw == grammar.KeywordAs
+}
+
+func (p *Parser) parseType() ast.TypeRef {
+	name := p.expect(token.Identifier, "G2044", "I expected a type name.", "Use a type name such as Text, Number, Boolean, Object, or a user-defined type.")
+	if name.Kind == token.Invalid {
+		return ast.TypeRef{Span: name.Span}
+	}
+	t := ast.TypeRef{Span: name.Span, Name: name.Text}
+	if p.at(token.LBracket) && p.pos+1 < len(p.tokens) && p.tokens[p.pos+1].Kind == token.RBracket {
+		p.advance()
+		close := p.advance()
+		t.Array = true
+		t.Span.End = close.Span.End
+	}
+	return t
 }
