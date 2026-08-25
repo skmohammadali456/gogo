@@ -40,7 +40,7 @@ Status: **COMPLETE**. Bengali keywords and natural Bengali forms are implemented
 
 **8. Hindi grammar**
 
-Add Hindi keywords and natural Hindi forms for the supported GOGO constructs. Hindi source must receive the same compiler, diagnostic, formatting, and tooling quality as English and Bengali.
+Status: **COMPLETE**. Hindi keywords and natural Hindi forms are implemented through the Step 5 vocabulary abstraction for all currently supported GOGO constructs, with Unicode identifiers, localized diagnostics, UTF-8 source positions, formatter compatibility expectations, parser recovery coverage, AST equivalence tests, and isolated mixed-language sessions. See `docs/compiler/hindi-grammar.md`.
 
 **9. Language configuration and aliases**
 

@@ -122,8 +122,17 @@ var vocabularies = map[Language]Vocabulary{
 		{"কম্পোনেন্ট", KeywordComponent}, {"উপাদান", KeywordComponent},
 	}),
 	Hindi: NewVocabulary(Hindi, "Hindi", []Entry{
-		{"बनाओ", KeywordCreate}, {"चर", KeywordVariable}, {"फ़ंक्शन", KeywordFunction},
-		{"के_रूप_में", KeywordAs}, {"लौटाओ", KeywordReturn}, {"अगर", KeywordIf}, {"वरना", KeywordElse},
+		{"बनाओ", KeywordCreate}, {"निर्माण", KeywordCreate},
+		{"चर", KeywordVariable}, {"मान", KeywordVariable},
+		{"स्थिर", KeywordConstant}, {"अचर", KeywordConstant},
+		{"फलन", KeywordFunction}, {"कार्य", KeywordFunction}, {"फ़ंक्शन", KeywordFunction},
+		{"रूप", KeywordAs}, {"जैसा", KeywordAs}, {"के_रूप_में", KeywordAs},
+		{"लौटाओ", KeywordReturn}, {"वापस", KeywordReturn},
+		{"अगर", KeywordIf}, {"यदि", KeywordIf},
+		{"वरना", KeywordElse}, {"अन्यथा", KeywordElse},
+		{"आयात", KeywordImport}, {"लाओ", KeywordImport},
+		{"से", KeywordFrom},
+		{"घटक", KeywordComponent}, {"अवयव", KeywordComponent},
 	}),
 }
 
