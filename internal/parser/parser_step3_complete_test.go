@@ -24,6 +24,17 @@ func TestStep3AssignmentAndConditional(t *testing.T) {
 	if _, ok := assignment.Right.(ast.ConditionalExpr); !ok { t.Fatalf("expected conditional right side, got %#v", assignment.Right) }
 }
 
+func TestStep3AllAssignmentOperators(t *testing.T) {
+	operators := []string{"=", "+=", "-=", "*=", "**=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>=", ">>>="}
+	for _, operator := range operators {
+		p, file := parseStep3Complete("value " + operator + " other")
+		if len(p.Diagnostics()) != 0 { t.Fatalf("operator %q produced diagnostics: %v", operator, p.Diagnostics()) }
+		expr := file.Statements[0].(ast.ExprStmt).Expression
+		assignment, ok := expr.(ast.AssignmentExpr)
+		if !ok || assignment.Operator != operator { t.Fatalf("operator %q parsed as %#v", operator, expr) }
+	}
+}
+
 func TestStep3RightAssociativeOperators(t *testing.T) {
 	p, file := parseStep3Complete(`a ** b ** c`)
 	if len(p.Diagnostics()) != 0 { t.Fatalf("unexpected diagnostics: %v", p.Diagnostics()) }
@@ -57,6 +68,13 @@ func TestStep3OptionalMemberAccess(t *testing.T) {
 	if root.Name != "name" || root.Optional { t.Fatalf("unexpected root member: %#v", root) }
 	optional, ok := root.Object.(ast.MemberExpr)
 	if !ok || !optional.Optional || optional.Name != "profile" { t.Fatalf("expected optional profile access, got %#v", root.Object) }
+}
+
+func TestStep3CallArgumentsAndTrailingComma(t *testing.T) {
+	p, file := parseStep3Complete(`greet(first, second,)`)
+	if len(p.Diagnostics()) != 0 { t.Fatalf("unexpected diagnostics: %v", p.Diagnostics()) }
+	call := file.Statements[0].(ast.ExprStmt).Expression.(ast.CallExpr)
+	if len(call.Arguments) != 2 { t.Fatalf("expected two arguments, got %d", len(call.Arguments)) }
 }
 
 func TestStep3AssignmentTargetDiagnostic(t *testing.T) {
