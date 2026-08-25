@@ -31,7 +31,7 @@ Step 3 AST coverage includes:
 - if and else blocks
 - arrays and array elements
 - object literals and object properties
-- member access
+- required and optional member access
 - index access
 
 ## Structural grammar
@@ -49,6 +49,7 @@ expression = expression
 expression += expression
 expression ? expression : expression
 expression.member
+expression?.member
 expression[index]
 expression(arguments)
 [expression, ...]
@@ -61,6 +62,8 @@ The parser permits trailing commas in function parameter lists, calls, arrays, a
 
 Expressions use precedence climbing. Assignment operators are right associative. Exponentiation is right associative. Arithmetic, comparison, equality, logical, bitwise, shift, and nullish operators are represented as binary expressions. Prefix operators become unary expressions. Calls, member access, and indexing bind as postfix operations.
 
+`MemberExpr.Optional` records whether member access used `?.` rather than `.`. This preserves the lexical distinction for later semantic and lowering phases.
+
 Assignment targets are checked structurally. An assignment target must be an identifier, member expression, or index expression. The parser reports G2028 for invalid assignment targets.
 
 ## Multilingual source
@@ -69,12 +72,10 @@ The parser accepts Unicode identifiers, including Bengali and Hindi. It does not
 
 ## Error recovery
 
-Parser errors use structured diagnostics with stable G200x codes, human-readable messages, hints, and source spans. Statement recovery advances to a semicolon, closing brace, or end of file. Object recovery also recognizes commas and closing braces so malformed properties do not unnecessarily destroy the surrounding object.
+Parser errors use structured diagnostics with stable G200x codes, human-readable messages, hints, and source spans. Statement recovery advances to a semicolon, closing brace, or end of file. Top-level recovery also handles unmatched closing braces explicitly. Object recovery recognizes commas and closing braces so malformed properties do not unnecessarily destroy the surrounding object.
 
 The parser is designed to continue after syntax errors and produce the maximum useful AST for later diagnostics.
 
 ## Scope boundary
 
 Step 3 is intentionally structural. Type checking, name resolution, localized keyword grammars, generics, modules, pattern matching, UI syntax, IR, and code generation belong to later roadmap steps.
-
-Optional chaining is lexically recognized but is not yet represented as a distinct Step 3 AST construct. It remains a later grammar and AST extension.
