@@ -50,14 +50,16 @@ const (
 )
 
 type Label struct {
-	Style   LabelStyle  `json:"style"`
-	FileID  uint32      `json:"file_id,omitempty"`
-	Span    source.Span `json:"span"`
-	Message string      `json:"message,omitempty"`
+	Style    LabelStyle  `json:"style"`
+	FileID   uint32      `json:"file_id,omitempty"`
+	FilePath string      `json:"file_path,omitempty"`
+	Span     source.Span `json:"span"`
+	Message  string      `json:"message,omitempty"`
 }
 
 type FixIt struct {
 	FileID      uint32      `json:"file_id,omitempty"`
+	FilePath    string      `json:"file_path,omitempty"`
 	Span        source.Span `json:"span"`
 	Replacement string      `json:"replacement"`
 	Message     string      `json:"message,omitempty"`
@@ -71,6 +73,7 @@ type Suggestion struct {
 type Diagnostic struct {
 	Severity    Severity     `json:"severity"`
 	FileID      uint32       `json:"file_id,omitempty"`
+	FilePath    string       `json:"file_path,omitempty"`
 	Code        string       `json:"code"`
 	Message     string       `json:"message"`
 	Hint        string       `json:"hint,omitempty"`
@@ -83,17 +86,23 @@ type Diagnostic struct {
 
 func (d Diagnostic) normalized() Diagnostic {
 	if len(d.Labels) == 0 && d.Span.IsValid() {
-		d.Labels = []Label{{Style: Primary, FileID: d.FileID, Span: d.Span}}
+		d.Labels = []Label{{Style: Primary, FileID: d.FileID, FilePath: d.FilePath, Span: d.Span}}
 	}
 	for i := range d.Labels {
 		if d.Labels[i].FileID == 0 {
 			d.Labels[i].FileID = d.FileID
+		}
+		if d.Labels[i].FilePath == "" {
+			d.Labels[i].FilePath = d.FilePath
 		}
 	}
 	for i := range d.Suggestions {
 		for j := range d.Suggestions[i].Edits {
 			if d.Suggestions[i].Edits[j].FileID == 0 {
 				d.Suggestions[i].Edits[j].FileID = d.FileID
+			}
+			if d.Suggestions[i].Edits[j].FilePath == "" {
+				d.Suggestions[i].Edits[j].FilePath = d.FilePath
 			}
 		}
 	}
@@ -123,7 +132,7 @@ func orderedDeduped(in []Diagnostic) []Diagnostic {
 	seen := map[string]bool{}
 	for _, d := range in {
 		d = d.normalized()
-		key := fmt.Sprintf("%d|%s|%d|%d|%d|%s", d.FileID, d.Code, d.Span.Start.Offset, d.Span.End.Offset, d.Severity, d.Message)
+		key := fmt.Sprintf("%d|%s|%s|%d|%d|%d|%s", d.FileID, d.FilePath, d.Code, d.Span.Start.Offset, d.Span.End.Offset, d.Severity, d.Message)
 		if seen[key] {
 			continue
 		}
@@ -134,6 +143,9 @@ func orderedDeduped(in []Diagnostic) []Diagnostic {
 		a, b := out[i], out[j]
 		if a.FileID != b.FileID {
 			return a.FileID < b.FileID
+		}
+		if a.FilePath != b.FilePath {
+			return a.FilePath < b.FilePath
 		}
 		if a.Span.Start.Offset != b.Span.Start.Offset {
 			return a.Span.Start.Offset < b.Span.Start.Offset
@@ -160,7 +172,7 @@ func (r Renderer) Text(diags []Diagnostic) string {
 		}
 		d = translate(d.normalized(), r.Locale)
 		fmt.Fprintf(&b, "%s[%s]: %s\n", d.Severity.String(), d.Code, d.Message)
-		path, text := r.fileText(d.FileID)
+		path, text := r.fileText(d.FileID, d.FilePath)
 		fmt.Fprintf(&b, " --> %s:%d:%d\n", path, d.Span.Start.Line, d.Span.Start.Column)
 		b.WriteString(snippet(text, d))
 		for _, label := range d.Labels {
@@ -234,7 +246,7 @@ func (r Renderer) JSON(diags []Diagnostic) ([]byte, error) {
 	schema := make([]JSONDiagnostic, 0, len(out))
 	for _, d := range out {
 		d = translate(d.normalized(), r.Locale)
-		file, _ := r.fileText(d.FileID)
+		file, _ := r.fileText(d.FileID, d.FilePath)
 		schema = append(schema, r.jsonDiagnostic(d, file))
 	}
 	return json.MarshalIndent(schema, "", "  ")
@@ -243,14 +255,14 @@ func (r Renderer) JSON(diags []Diagnostic) ([]byte, error) {
 func (r Renderer) jsonDiagnostic(d Diagnostic, file string) JSONDiagnostic {
 	labels := make([]JSONLabel, 0, len(d.Labels))
 	for _, label := range d.Labels {
-		labelFile, _ := r.fileText(label.FileID)
+		labelFile, _ := r.fileText(label.FileID, label.FilePath)
 		labels = append(labels, JSONLabel{Style: label.Style, File: labelFile, Span: jsonSpan(label.Span), Message: label.Message})
 	}
 	suggestions := make([]JSONSuggestion, 0, len(d.Suggestions))
 	for _, suggestion := range d.Suggestions {
 		edits := make([]JSONFixIt, 0, len(suggestion.Edits))
 		for _, edit := range suggestion.Edits {
-			editFile, _ := r.fileText(edit.FileID)
+			editFile, _ := r.fileText(edit.FileID, edit.FilePath)
 			edits = append(edits, JSONFixIt{File: editFile, Span: jsonSpan(edit.Span), Replacement: edit.Replacement, Message: edit.Message})
 		}
 		suggestions = append(suggestions, JSONSuggestion{Message: suggestion.Message, Edits: edits})
@@ -273,14 +285,20 @@ func localeOrEnglish(locale Locale) Locale {
 	return locale
 }
 
-func (r Renderer) fileText(id uint32) (string, string) {
+func (r Renderer) fileText(id uint32, fallbackPath string) (string, string) {
 	if r.Files == nil {
+		if fallbackPath != "" {
+			return fallbackPath, ""
+		}
 		return "<unknown>", ""
 	}
 	if id != 0 {
 		if f, ok := r.Files.Get(id); ok {
 			return f.Path, f.Text
 		}
+	}
+	if fallbackPath != "" {
+		return fallbackPath, ""
 	}
 	if f, ok := r.Files.Get(1); ok {
 		return f.Path, f.Text

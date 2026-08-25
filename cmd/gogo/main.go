@@ -26,7 +26,7 @@ func main() {
 	for _, path := range flag.Args() {
 		data, err := os.ReadFile(path)
 		if err != nil {
-			s.Diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G0005", Message: "I could not read this source file.", Hint: err.Error()})
+			s.Diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G0005", Message: "I could not read this source file.", Hint: err.Error(), FilePath: path})
 			continue
 		}
 		id := s.AddFile(path, string(data))
