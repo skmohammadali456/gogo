@@ -43,11 +43,15 @@ GOGO's lexer recognizes:
 - octal, such as `0o755`
 - integer suffix `n`, reserved for the future numeric type system
 
-Malformed decimal, exponent, separator, or based-number forms produce lexical diagnostics.
+Malformed decimal, exponent, separator, based-number, or numeric-adjacency forms produce lexical diagnostics. For example, `123abc`, `0x1g`, `0b1012`, and `42n4` are rejected as malformed numeric tokens rather than being silently split into unrelated tokens.
+
+Numeric digits are currently ASCII digits. Unicode letters are supported for identifiers, but Unicode decimal digits do not silently become decimal numeric digits.
 
 ## Strings
 
 Single and double quoted strings are supported. Escape validation covers simple escapes such as `\\n`, `\\r`, `\\t`, `\\b`, `\\f`, `\\v`, `\\0`, `\\\\`, `\\"`, and `\\'`, hexadecimal escapes such as `\\x41`, four-digit Unicode escapes such as `\\u0041`, and braced Unicode escapes such as `\\u{1F600}`.
+
+Braced Unicode escapes must represent a valid Unicode scalar value. Out-of-range values and surrogate code points are rejected.
 
 An unterminated string or invalid escape produces a diagnostic and an `Invalid` token so lexing can continue safely.
 
@@ -67,7 +71,7 @@ Unicode whitespace is skipped. `//` starts a line comment. `/*` and `*/` delimit
 
 ## Recovery and UTF-8
 
-Invalid UTF-8 is diagnosed at the lexer boundary. Unknown characters become `Invalid` tokens and advance the cursor, preventing a single bad character from trapping the lexer.
+Invalid UTF-8 is diagnosed at the lexer boundary, including when malformed bytes occur inside source that would otherwise be whitespace or comments. Unknown characters become `Invalid` tokens and advance the cursor, preventing a single bad character from trapping the lexer.
 
 ## Compiler integration
 
@@ -75,4 +79,4 @@ Invalid UTF-8 is diagnosed at the lexer boundary. Unknown characters become `Inv
 
 ## Acceptance tests
 
-The Step 2 test suite covers English, Bengali, and Hindi identifiers, numbers and numeric forms, the complete operator surface, punctuation, strings and Unicode escapes, invalid literals, comments, malformed UTF-8, source spans, compiler-session integration, and a fuzz target that checks the lexer does not panic on arbitrary input.
+The Step 2 test suite covers English, Bengali, and Hindi identifiers, numbers and numeric forms, malformed numeric adjacency, the complete operator surface, punctuation, strings and Unicode escapes, invalid literals, comments, malformed UTF-8 including comment content, source spans, compiler-session integration, and a fuzz target that checks the lexer does not panic on arbitrary input.
