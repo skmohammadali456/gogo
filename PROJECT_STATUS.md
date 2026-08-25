@@ -8,7 +8,7 @@
 - Release target: GOGO 1.0
 - Completed work packages: 1 / 62
 - Current work package: 3, Parser and AST
-- Status: Step 3 implementation complete. Runtime validation is blocked by the repository's GitHub Actions startup failure. Step 2 has the same external validation gate.
+- Status: Step 3 implementation complete after deep static review. Runtime validation is blocked by the repository's GitHub Actions startup failure. Step 2 has the same external validation gate.
 
 ## Step 1, Compiler source model and positions
 
@@ -36,6 +36,7 @@ Implemented and integrated:
 - Binary expressions with precedence climbing.
 - Right-associative exponentiation.
 - Assignment and compound assignment expressions.
+- Right-associative assignment parsing.
 - Conditional expressions.
 - Function call expressions and ordered arguments.
 - Function declarations and parameter lists.
@@ -46,18 +47,29 @@ Implemented and integrated:
 - If and else blocks.
 - Arrays and array elements.
 - Object literals and properties.
-- Member access with `.`.
+- Required member access with `.`.
+- Optional member access with `?.`, including preservation of the optional flag in the AST.
 - Index access with `[ ]`.
 - Trailing commas in supported delimited constructs.
 - Assignment-target validation.
 - Human-readable parser diagnostics with stable G200x codes.
-- Statement and object-level error recovery.
+- Statement, object, and stray-brace recovery.
 - English, Bengali, and Hindi Unicode identifier parsing.
 - Compiler-session `ParseFile` integration.
 - Parser regression and Step 3 acceptance tests.
+- AST span invariant tests.
 - Parser and AST documentation.
 
-The implementation is ready for runtime acceptance. The only remaining Step 3 gate is executing the repository validation suite and confirming that the complete repository builds cleanly. GitHub Actions cannot currently provide that result because its registered workflow fails with `startup_failure` before a job is created.
+### Deep review findings
+
+A deep source-level audit found two correctness gaps in the earlier Step 3 implementation and fixed them before runtime acceptance:
+
+1. `?.` was lexed and parsed, but the parser did not preserve the optional-access bit in `MemberExpr`. The AST now records `Optional: true` for `?.` and `false` for `.`.
+2. A stray top-level `}` could leave the parser at the same token during recovery, creating a potential infinite loop. Top-level stray closing braces now produce G2034 and advance safely. Block recovery also guarantees forward progress.
+
+The acceptance suite now explicitly covers optional member access, all supported assignment operators, right-associative assignments, trailing call arguments, malformed collection recovery, stray closing braces, and AST span preservation.
+
+The implementation is ready for runtime acceptance. The remaining Step 3 gate is executing `gofmt`, `go test ./...`, `go vet ./...`, `go build ./cmd/gogo`, and the registered GitHub Actions workflow. GitHub Actions cannot currently provide that result because its registered workflow fails with `startup_failure` before a job is created.
 
 ## Development rule
 
