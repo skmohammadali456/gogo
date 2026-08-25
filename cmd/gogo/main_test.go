@@ -70,3 +70,48 @@ func TestCLIInvalidUTF8JSONIncludesStableLocationAndFile(t *testing.T) {
 		t.Fatalf("unexpected invalid UTF-8 diagnostic JSON: %#v", got)
 	}
 }
+
+func TestCLIUsesDiscoveredProjectLanguageConfiguration(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "gogo-test")
+	if out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput(); err != nil {
+		t.Fatalf("build CLI: %v\n%s", err, out)
+	}
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "gogo.json"), []byte(`{"language":"bn"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	nested := filepath.Join(root, "src")
+	if err := os.Mkdir(nested, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	src := filepath.Join(nested, "main.gogo")
+	if err := os.WriteFile(src, []byte("তৈরি চলক নাম হিসেবে \"আলেক্স\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command(bin, src).CombinedOutput(); err != nil {
+		t.Fatalf("expected configured Bengali source to compile: %v\n%s", err, out)
+	}
+}
+
+func TestCLIReportsUnsupportedEncodingConfiguration(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "gogo-test")
+	if out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput(); err != nil {
+		t.Fatalf("build CLI: %v\n%s", err, out)
+	}
+	root := t.TempDir()
+	cfg := filepath.Join(root, "gogo.json")
+	if err := os.WriteFile(cfg, []byte(`{"encoding":"latin1"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	src := filepath.Join(root, "main.gogo")
+	if err := os.WriteFile(src, []byte("create variable x as 1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command(bin, "-json", src).CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected config diagnostic failure: %s", out)
+	}
+	if !strings.Contains(string(out), `"code": "G3003"`) {
+		t.Fatalf("missing encoding diagnostic in %s", out)
+	}
+}

@@ -6,9 +6,9 @@
 - Compiler implementation language: Go
 - Repository: `skmohammadali786/gogo`
 - Release target: GOGO 1.0
-- Completed work packages: 8 / 62
-- Current work package: 8, complete
-- Status: Steps 1, 2, 3, 4, 5, 6, 7, and 8 are complete. Step 8 is ready for review.
+- Completed work packages: 9 / 62
+- Current work package: 9, complete
+- Status: Steps 1, 2, 3, 4, 5, 6, 7, 8, and 9 are complete. Step 9 is ready for review.
 
 ## Step 1, Compiler source model and positions
 
@@ -140,3 +140,9 @@ The code has undergone source-level verification and corrective changes, but run
 ## Development rule
 
 Every GOGO step must be implemented in the repository, tested, integrated with previous work, documented, reviewed for architectural consistency, and validated before it is marked runtime-accepted. External CI limitations must be recorded explicitly rather than hidden.
+
+## Step 9, Language configuration and aliases
+
+Status: **COMPLETE**
+
+Step 9 adds a single project-level `gogo.json` configuration model, deterministic discovery, centralized validation, resolved compiler configuration, English/Bengali/Hindi vocabulary selection, project aliases mapped to canonical grammar keywords, explicit strictness, UTF-8 encoding, current `ast` target, `step9` compatibility, CLI overrides, documentation, and regression tests.

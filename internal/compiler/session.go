@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"github.com/skmohammadali786/gogo/internal/config"
 	"github.com/skmohammadali786/gogo/internal/diagnostics"
 	"github.com/skmohammadali786/gogo/internal/grammar"
 	"github.com/skmohammadali786/gogo/internal/lexer"
@@ -13,6 +14,7 @@ type Session struct {
 	Files       *source.FileMap
 	Diagnostics diagnostics.Bag
 	vocabulary  grammar.Vocabulary
+	Config      config.Resolved
 }
 
 // Option configures a compiler session.
@@ -23,17 +25,25 @@ func WithGrammarLanguage(language grammar.Language) Option {
 	return func(s *Session) {
 		if v, err := grammar.ForLanguage(language); err == nil {
 			s.vocabulary = v
+			s.Config.Vocabulary = v
+			s.Config.Language = v.Language
 		}
 	}
 }
 
 // WithGrammarVocabulary selects an explicit active grammar vocabulary for this session.
 func WithGrammarVocabulary(v grammar.Vocabulary) Option {
-	return func(s *Session) { s.vocabulary = v }
+	return func(s *Session) { s.vocabulary = v; s.Config.Vocabulary = v; s.Config.Language = v.Language }
+}
+
+// WithResolvedConfig selects a validated project language configuration for this session.
+func WithResolvedConfig(c config.Resolved) Option {
+	return func(s *Session) { s.Config = c; s.vocabulary = c.Vocabulary }
 }
 
 func NewSession(opts ...Option) *Session {
-	s := &Session{Files: source.NewFileMap(), vocabulary: grammar.DefaultVocabulary()}
+	defaultConfig := config.DefaultResolved()
+	s := &Session{Files: source.NewFileMap(), vocabulary: defaultConfig.Vocabulary, Config: defaultConfig}
 	for _, opt := range opts {
 		opt(s)
 	}
