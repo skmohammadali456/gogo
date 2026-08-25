@@ -1,7 +1,6 @@
 package lexer
 
 import (
-	"strconv"
 	"unicode"
 	"unicode/utf8"
 
@@ -62,9 +61,7 @@ func (l *Lexer) Next() token.Token {
 		{"??", token.QuestionQuestion}, {"?.", token.QuestionDot}, {"...", token.Ellipsis},
 		{"<=", token.LessEqual}, {">=", token.GreaterEqual},
 	}
-	for _, p := range pairs {
-		if l.cursor.Match(p.text) { return l.make(p.kind, start) }
-	}
+	for _, p := range pairs { if l.cursor.Match(p.text) { return l.make(p.kind, start) } }
 
 	single := map[rune]token.Kind{
 		'{': token.LBrace, '}': token.RBrace, '(': token.LParen, ')': token.RParen,
@@ -91,13 +88,8 @@ func (l *Lexer) skipSpaceAndComments() (token.Token, bool) {
 		}
 		if l.cursor.Match("/*") {
 			closed := false
-			for !l.cursor.Done() {
-				if l.cursor.Match("*/") { closed = true; break }
-				l.advanceRune()
-			}
-			if !closed {
-				l.diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G1001", Message: "This block comment never closes.", Hint: "Add */ to close the comment.", Span: l.span(start)})
-			}
+			for !l.cursor.Done() { if l.cursor.Match("*/") { closed = true; break }; l.advanceRune() }
+			if !closed { l.diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G1001", Message: "This block comment never closes.", Hint: "Add */ to close the comment.", Span: l.span(start)}) }
 			if l.includeComments { return l.make(token.Comment, start), true }
 			continue
 		}
@@ -115,15 +107,10 @@ func (l *Lexer) number(start int) token.Token {
 	if l.cursor.Match("0x") || l.cursor.Match("0X") { return l.radixNumber(start, 16) }
 	if l.cursor.Match("0b") || l.cursor.Match("0B") { return l.radixNumber(start, 2) }
 	if l.cursor.Match("0o") || l.cursor.Match("0O") { return l.radixNumber(start, 8) }
-
 	if !l.consumeDigits(10) { return l.invalidNumber(start, "This number is missing digits.", "Write a number such as 42.") }
 	if !l.cursor.Done() {
 		r, _ := l.cursor.Peek()
-		if r == '.' {
-			l.advanceRune()
-			if l.cursor.Done() || !l.hasDigit() { return l.invalidNumber(start, "This decimal point must be followed by a digit.", "Write a decimal such as 10.5, not 10.") }
-			l.consumeDigits(10)
-		}
+		if r == '.' { l.advanceRune(); if l.cursor.Done() || !l.hasDigit() { return l.invalidNumber(start, "This decimal point must be followed by a digit.", "Write a decimal such as 10.5, not 10.") }; l.consumeDigits(10) }
 	}
 	if !l.cursor.Done() {
 		r, _ := l.cursor.Peek()
@@ -139,7 +126,7 @@ func (l *Lexer) number(start int) token.Token {
 }
 
 func (l *Lexer) radixNumber(start, base int) token.Token {
-	if !l.consumeDigits(base) { return l.invalidNumber(start, "This based number is missing valid digits.", "Use hexadecimal, binary, or octal digits after its prefix.") }
+	if !l.consumeDigits(base) { return l.invalidNumber(start, "This based number is missing valid digits.", "Use valid digits after the hexadecimal, binary, or octal prefix.") }
 	if !l.cursor.Done() { r, _ := l.cursor.Peek(); if r == 'n' { l.advanceRune() } }
 	return l.make(token.Number, start)
 }
@@ -149,25 +136,14 @@ func (l *Lexer) consumeDigits(base int) bool {
 	lastUnderscore := false
 	for !l.cursor.Done() {
 		r, _ := l.cursor.Peek()
-		if r == '_' {
-			if count == 0 || lastUnderscore { break }
-			lastUnderscore = true
-			l.advanceRune()
-			continue
-		}
-		if digitValue(r) >= base { break }
-		lastUnderscore = false
-		count++
-		l.advanceRune()
+		if r == '_' { if count == 0 || lastUnderscore { break }; lastUnderscore = true; l.advanceRune(); continue }
+		if digitValue(r) < 0 || digitValue(r) >= base { break }
+		lastUnderscore = false; count++; l.advanceRune()
 	}
-	if lastUnderscore { return false }
-	return count > 0
+	return count > 0 && !lastUnderscore
 }
-
 func (l *Lexer) hasDigit() bool { r, _ := l.cursor.Peek(); return unicode.IsDigit(r) }
-func digitValue(r rune) int {
-	switch { case r >= '0' && r <= '9': return int(r-'0'); case r >= 'a' && r <= 'f': return int(r-'a')+10; case r >= 'A' && r <= 'F': return int(r-'A')+10; default: return -1 }
-}
+func digitValue(r rune) int { switch { case r >= '0' && r <= '9': return int(r-'0'); case r >= 'a' && r <= 'f': return int(r-'a')+10; case r >= 'A' && r <= 'F': return int(r-'A')+10; default: return -1 } }
 
 func (l *Lexer) stringLiteral(start int, quote rune) token.Token {
 	l.advanceRune()
@@ -180,8 +156,7 @@ func (l *Lexer) stringLiteral(start int, quote rune) token.Token {
 			if isSimpleEscape(escaped) { l.advanceRune(); continue }
 			if escaped == 'x' { if !l.consumeHexEscape(2) { return l.invalidString(start, "This string contains an invalid hexadecimal escape.", "Use an escape such as \\x41.") }; continue }
 			if escaped == 'u' { if !l.consumeUnicodeEscape() { return l.invalidString(start, "This string contains an invalid Unicode escape.", "Use \\u0041 or \\u{1F600} with valid hexadecimal digits.") }; continue }
-			l.advanceRune()
-			return l.invalidString(start, "This string contains an unsupported escape sequence.", "Use a supported escape sequence.")
+			l.advanceRune(); return l.invalidString(start, "This string contains an unsupported escape sequence.", "Use a supported escape sequence.")
 		}
 		if r == quote { l.advanceRune(); return l.make(token.String, start) }
 		if r == '\n' || r == '\r' { break }
@@ -195,7 +170,6 @@ func (l *Lexer) consumeHexEscape(n int) bool {
 	for i := 0; i < n; i++ { if l.cursor.Done() { return false }; r, _ := l.cursor.Peek(); if digitValue(r) < 0 || digitValue(r) >= 16 { return false }; l.advanceRune() }
 	return true
 }
-
 func (l *Lexer) consumeUnicodeEscape() bool {
 	l.advanceRune()
 	if l.cursor.Done() { return false }
@@ -208,11 +182,7 @@ func (l *Lexer) consumeUnicodeEscape() bool {
 	for i := 0; i < 4; i++ { if l.cursor.Done() { return false }; r, _ = l.cursor.Peek(); if digitValue(r) < 0 || digitValue(r) >= 16 { return false }; l.advanceRune() }
 	return true
 }
-
-func (l *Lexer) invalidString(start int, message, hint string) token.Token {
-	l.diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G1004", Message: message, Hint: hint, Span: l.span(start)})
-	return token.New(token.Invalid, l.file.Text[start:l.cursor.Offset], l.span(start))
-}
+func (l *Lexer) invalidString(start int, message, hint string) token.Token { l.diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G1004", Message: message, Hint: hint, Span: l.span(start)}); return token.New(token.Invalid, l.file.Text[start:l.cursor.Offset], l.span(start)) }
 func (l *Lexer) advanceRune() { l.cursor.Advance() }
 func (l *Lexer) make(kind token.Kind, start int) token.Token { return token.New(kind, l.file.Text[start:l.cursor.Offset], l.span(start)) }
 func (l *Lexer) invalid(start int, message, hint string) token.Token { l.diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G1000", Message: message, Hint: hint, Span: l.span(start)}); return l.make(token.Invalid, start) }
@@ -221,7 +191,3 @@ func (l *Lexer) span(start int) source.Span { return source.Span{Start: source.P
 func isIdentifierStart(r rune) bool { return r == '_' || unicode.IsLetter(r) }
 func isIdentifierContinue(r rune) bool { return isIdentifierStart(r) || unicode.IsDigit(r) || unicode.IsMark(r) }
 func isSimpleEscape(r rune) bool { switch r { case 'n','r','t','b','f','v','0','\\','"','\'': return true; default: return false } }
-
-// Keep strconv linked into the lexer package so the lexical grammar can share
-// Go's exact rune classification conventions when numeric decoding is added.
-var _ = strconv.IntSize
