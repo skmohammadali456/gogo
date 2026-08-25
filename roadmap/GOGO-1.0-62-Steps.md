@@ -71,7 +71,7 @@ GOGO is being developed as a Go-powered, TypeScript-class frontend and UI progra
 
 Step 1 has completed a deep source audit and corrective pass. It establishes stable file identity, UTF-8 validation, byte offsets, one-based line and column positions, half-open source spans, Unicode cursor operations, source invariants, structured diagnostics, and compilation session integration.
 
-Deep audit fixes include restoring the explicit `ValidateUTF8` API required by the Step 1 test suite, keeping source validation explicit before compiler-session file replacement, and removing duplicate validation test names.
+Deep audit fixes include restoring the explicit `ValidateUTF8` API required by the Step 1 test suite, preserving the FileMap update invariant through compiler-session validation, and removing duplicate validation test names.
 
 Runtime acceptance remains pending until `gofmt`, `go test ./...`, `go vet ./...`, CLI build, and CI execution can run.
 
@@ -117,7 +117,7 @@ Implemented coverage:
 - AST span invariant tests
 - parser and AST documentation
 
-Deep audit fixes include preserving `?.` in `MemberExpr.Optional`, hardening parser forward progress for stray top-level braces, and removing a duplicate `Session.ParseFile` method that would prevent the compiler package from building. Documentation now matches the optional member-access AST contract.
+Deep audit fixes include preserving `?.` in `MemberExpr.Optional`, hardening parser forward progress for stray top-level braces, removing a duplicate `Session.ParseFile` method that would prevent the compiler package from building, and continuing object recovery after malformed properties when a comma provides a valid recovery boundary. Documentation and acceptance tests now match these behaviors.
 
 Runtime acceptance remains blocked until `gofmt`, `go test ./...`, `go vet ./...`, CLI build, and GitHub Actions can execute successfully. The latest Actions run still ends in `startup_failure` before a job is created.
 
