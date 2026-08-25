@@ -24,6 +24,17 @@ func TestSessionRejectsEmptyPath(t *testing.T) {
 	}
 }
 
+func TestSessionRejectsInvalidUTF8WithoutMutatingExistingFile(t *testing.T) {
+	s := NewSession()
+	id := s.AddFile("main.gogo", "create variable value as 1")
+	if id == 0 { t.Fatal("expected initial file to be accepted") }
+
+	bad := string([]byte{'x', 0xff})
+	if got := s.AddFile("main.gogo", bad); got != 0 { t.Fatalf("expected invalid replacement to be rejected, got %d", got) }
+	file, ok := s.Files.Get(id)
+	if !ok || file.Text != "create variable value as 1" { t.Fatalf("invalid replacement mutated existing file: %+v", file) }
+}
+
 func TestSessionLexFileIntegratesLexerDiagnostics(t *testing.T) {
 	s := NewSession()
 	id := s.AddFile("main.gogo", "create variable value as 10.")
