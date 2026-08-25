@@ -38,15 +38,20 @@ Implemented foundation:
 - Blocks.
 - Expression statements.
 - Variable declarations using the initial GOGO `create variable ... as ...` surface form.
+- Function declarations and parameter lists.
 - Return statements.
+- If and else blocks.
+- Arrays and array elements.
+- Object literals and properties.
+- Member access with `.`.
+- Index access with `[ ]`.
 - Human-readable parser diagnostics with G200x codes.
 - Parser error recovery.
 - English, Bengali, and Hindi identifier parsing.
 - Compiler-session `ParseFile` integration.
-- Parser and AST documentation.
-- Parser regression tests.
+- Parser and AST tests.
 
-Remaining Step 3 work will expand the structural grammar required by functions, control flow, collections, object literals, member access, indexing, and other core GOGO syntax, followed by full validation and acceptance.
+Remaining Step 3 work is deep validation, additional malformed-input recovery coverage, AST invariants, complete documentation, and full repository execution validation before acceptance.
 
 ## Development rule
 
