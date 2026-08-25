@@ -60,6 +60,8 @@ func SpanOf(n Node) source.Span {
 	case Literal: return v.Span
 	case UnaryExpr: return v.Span
 	case BinaryExpr: return v.Span
+	case AssignmentExpr: return v.Span
+	case ConditionalExpr: return v.Span
 	case CallExpr: return v.Span
 	case FunctionDecl: return v.Span
 	case IfStmt: return v.Span
