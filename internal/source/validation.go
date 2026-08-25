@@ -5,6 +5,9 @@ import (
 	"unicode/utf8"
 )
 
+// ValidateUTF8 reports whether text is valid UTF-8 source text.
+func ValidateUTF8(text string) bool { return utf8.ValidString(text) }
+
 // ValidatePath checks the minimum invariants required for a source path.
 // Path normalization and project-root policy belong to the project layer.
 func ValidatePath(path string) bool {
@@ -16,5 +19,5 @@ func ValidateFile(file File) bool {
 	if file.ID == 0 || !ValidatePath(file.Path) {
 		return false
 	}
-	return utf8.ValidString(file.Text)
+	return ValidateUTF8(file.Text)
 }
