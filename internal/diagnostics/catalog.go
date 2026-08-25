@@ -66,6 +66,7 @@ var Catalog = map[Code]CatalogEntry{
 	"G2032": entry("I expected a function argument.", "আমি একটি function argument প্রত্যাশা করেছি।", "मुझे function argument अपेक्षित था।", "Add an expression or close the argument list.", "একটি expression যোগ করুন অথবা argument list বন্ধ করুন।", "expression जोड़ें या argument list बंद करें।"),
 	"G2033": entry("I expected an array element.", "আমি একটি array element প্রত্যাশা করেছি।", "मुझे array element अपेक्षित था।", "Add a value or close the array.", "একটি মান যোগ করুন অথবা array বন্ধ করুন।", "एक मान जोड़ें या array बंद करें।"),
 	"G2034": entry("I found a closing brace without a matching block.", "মেলানো block ছাড়া একটি closing brace পাওয়া গেছে।", "मिलते block के बिना closing brace मिला।", "Remove this } or add the block that should contain it.", "এই } সরান অথবা যে block-এ এটি থাকবে সেটি যোগ করুন।", "इस } को हटाएँ या वह block जोड़ें जिसमें यह होना चाहिए।"),
+	"G2035": entry("I found extra tokens after this expression statement.", "এই expression statement-এর পরে অতিরিক্ত token পাওয়া গেছে।", "इस expression statement के बाद अतिरिक्त token मिला।", "Separate statements with semicolons or use the selected grammar vocabulary.", "statement আলাদা করতে semicolon ব্যবহার করুন অথবা নির্বাচিত grammar vocabulary ব্যবহার করুন।", "statements अलग करने के लिए semicolon इस्तेमाल करें या चुनी हुई grammar vocabulary इस्तेमाल करें।"),
 }
 
 func entry(en, bn, hi, hintEN, hintBN, hintHI string) CatalogEntry {

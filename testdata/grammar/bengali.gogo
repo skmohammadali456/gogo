@@ -1,0 +1,2 @@
+তৈরি চলক user হিসেবে "Alex"
+তৈরি ফাংশন greet(name) { যদি name { ফেরত user } নইলে { ফেরত name } }
