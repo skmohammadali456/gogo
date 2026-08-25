@@ -1,3 +1,3 @@
 module github.com/skmohammadali786/gogo
 
-go 1.24
+go 1.23
