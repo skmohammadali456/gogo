@@ -1,33 +1,80 @@
 # GOGO Parser and AST
 
-Step 3 introduces the syntax tree layer between lexical tokens and semantic analysis.
+Step 3 converts lexical tokens into a structured, source-spanned abstract syntax tree. It is the structural syntax layer between lexing and later semantic analysis.
 
 ## Pipeline
-
-GOGO source is converted to tokens by the lexer, then parsed into a structured AST. The parser does not perform type checking, name resolution, or code generation.
 
 ```text
 source -> lexer -> tokens -> parser -> AST -> semantic analysis
 ```
 
+The parser owns structure, grouping, precedence, syntax diagnostics, and recovery. It does not perform type checking, name resolution, overload resolution, or code generation.
+
 ## AST principles
 
-Every AST node carries a source span. This lets later compiler diagnostics point back to the original GOGO source.
+Every AST node carries a source span. Later compiler phases can therefore report diagnostics against the original GOGO source.
 
-The initial AST includes files, identifiers, literals, unary expressions, binary expressions, calls, blocks, expression statements, variable declarations, and return statements.
+Step 3 AST coverage includes:
 
-## Grammar separation
+- files and statement lists
+- identifiers and literals
+- unary expressions
+- binary expressions
+- assignment and compound assignment expressions
+- conditional expressions
+- function calls and ordered arguments
+- function declarations and parameters
+- blocks
+- expression statements
+- variable declarations
+- return statements
+- if and else blocks
+- arrays and array elements
+- object literals and object properties
+- member access
+- index access
 
-The parser accepts structural forms while the language grammar layer will eventually map English, Bengali, and Hindi surface forms to the same semantic constructs. Keyword recognition is therefore not added to the lexer.
+## Structural grammar
+
+The current prototype supports the structural forms needed by the Step 3 parser foundation:
+
+```text
+create variable name as expression
+create function name(parameter, ...) { ... }
+return expression
+if expression { ... } else { ... }
+
+expression
+expression = expression
+expression += expression
+expression ? expression : expression
+expression.member
+expression[index]
+expression(arguments)
+[expression, ...]
+{ key: expression, ... }
+```
+
+The parser permits trailing commas in function parameter lists, calls, arrays, and objects.
 
 ## Expression parsing
 
-Expressions use precedence climbing. Arithmetic, comparison, equality, logical, bitwise, shift, and nullish operators are represented as binary expressions. Prefix operators become unary expressions. Function calls contain an ordered argument list.
+Expressions use precedence climbing. Assignment operators are right associative. Exponentiation is right associative. Arithmetic, comparison, equality, logical, bitwise, shift, and nullish operators are represented as binary expressions. Prefix operators become unary expressions. Calls, member access, and indexing bind as postfix operations.
+
+Assignment targets are checked structurally. An assignment target must be an identifier, member expression, or index expression. The parser reports G2028 for invalid assignment targets.
+
+## Multilingual source
+
+The parser accepts Unicode identifiers, including Bengali and Hindi. It does not hard-code localized keyword dictionaries. Later grammar work maps localized surface forms onto the same semantic constructs.
 
 ## Error recovery
 
-Parser errors use structured diagnostics with stable G200x codes, human-readable messages, hints, and source spans. Statement recovery skips to a semicolon, closing brace, or end of file so one malformed construct does not necessarily terminate the entire parse.
+Parser errors use structured diagnostics with stable G200x codes, human-readable messages, hints, and source spans. Statement recovery advances to a semicolon, closing brace, or end of file. Object recovery also recognizes commas and closing braces so malformed properties do not unnecessarily destroy the surrounding object.
 
-## Scope of Step 3
+The parser is designed to continue after syntax errors and produce the maximum useful AST for later diagnostics.
 
-This step establishes the parser and AST foundation. Full language grammar, type checking, name resolution, generics, pattern matching, modules, and UI syntax are implemented by later roadmap steps.
+## Scope boundary
+
+Step 3 is intentionally structural. Type checking, name resolution, localized keyword grammars, generics, modules, pattern matching, UI syntax, IR, and code generation belong to later roadmap steps.
+
+Optional chaining is lexically recognized but is not yet represented as a distinct Step 3 AST construct. It remains a later grammar and AST extension.
