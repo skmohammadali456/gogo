@@ -31,10 +31,15 @@ func TestLexNumbersAndJSStyleNumericForms(t *testing.T) {
 }
 
 func TestLexInvalidNumberDiagnostics(t *testing.T) {
-	for _, input := range []string{"10.", "1e", "1e+", "1_", "1__2", "0x", "0b", "0o"} {
+	for _, input := range []string{"10.", "1e", "1e+", "1_", "1__2", "0x", "0b", "0o", "123abc", "0x1g", "0b1012", "42n4"} {
 		l, tokens := lex(input)
 		if tokens[0].Kind != token.Invalid || len(l.Diagnostics()) != 1 || l.Diagnostics()[0].Code != "G1002" { t.Fatalf("%q: unexpected result: tokens=%#v diagnostics=%v", input, tokens, l.Diagnostics()) }
 	}
+}
+
+func TestLexUnicodeDigitsDoNotBecomeDecimalDigits(t *testing.T) {
+	l, tokens := lex("1.٢")
+	if tokens[0].Kind != token.Invalid || len(l.Diagnostics()) != 1 || l.Diagnostics()[0].Code != "G1002" { t.Fatalf("unexpected Unicode-digit result: tokens=%#v diagnostics=%v", tokens, l.Diagnostics()) }
 }
 
 func TestLexCompleteOperatorSet(t *testing.T) {
@@ -62,7 +67,7 @@ func TestLexStringsAndUnicodeEscapes(t *testing.T) {
 }
 
 func TestLexInvalidStringEscapes(t *testing.T) {
-	for _, input := range []string{`"hello\q"`, `"\x1"`, `"\u12"`, `"\u{1G}"`, `"\u{}"`} {
+	for _, input := range []string{`"hello\q"`, `"\x1"`, `"\u12"`, `"\u{1G}"`, `"\u{}"`, `"\u{110000}"`, `"\u{D800}"`} {
 		l, tokens := lex(input)
 		if tokens[0].Kind != token.Invalid || len(l.Diagnostics()) != 1 || l.Diagnostics()[0].Code != "G1004" { t.Fatalf("%q: unexpected result: %#v %v", input, tokens, l.Diagnostics()) }
 	}
@@ -95,6 +100,13 @@ func TestLexUnterminatedBlockComment(t *testing.T) {
 func TestLexMalformedUTF8(t *testing.T) {
 	l := New(source.File{ID: 1, Path: "main.gogo", Text: string([]byte{'x', 0xff, 'y'})})
 	assertKinds(t, l.LexAll(), token.Identifier, token.Invalid, token.Identifier, token.EOF)
+	if len(l.Diagnostics()) != 1 || l.Diagnostics()[0].Code != "G1000" { t.Fatalf("expected G1000, got %v", l.Diagnostics()) }
+}
+
+func TestLexMalformedUTF8InsideComment(t *testing.T) {
+	text := string([]byte{'/', '*', ' ', 0xff, ' ', '*', '/'})
+	l := New(source.File{ID: 1, Path: "main.gogo", Text: text})
+	assertKinds(t, l.LexAll(), token.EOF)
 	if len(l.Diagnostics()) != 1 || l.Diagnostics()[0].Code != "G1000" { t.Fatalf("expected G1000, got %v", l.Diagnostics()) }
 }
 
