@@ -36,3 +36,28 @@ func TestStep7BengaliKeywordsAreVocabularyScoped(t *testing.T) {
 		t.Fatalf("unknown Bengali words must remain identifiers")
 	}
 }
+
+func TestStep8BengaliVocabularyEntriesAreExactlyIntended(t *testing.T) {
+	want := map[string]Keyword{
+		"তৈরি": KeywordCreate, "ঘোষণা": KeywordCreate,
+		"চলক": KeywordVariable, "ধরি": KeywordVariable,
+		"ধ্রুবক": KeywordConstant, "অপরিবর্তনীয়": KeywordConstant,
+		"ফাংশন": KeywordFunction, "কাজ": KeywordFunction,
+		"হিসেবে": KeywordAs, "রূপে": KeywordAs,
+		"ফেরত": KeywordReturn, "ফেরাও": KeywordReturn,
+		"যদি":  KeywordIf,
+		"নইলে": KeywordElse, "অন্যথায়": KeywordElse,
+		"আমদানি": KeywordImport, "ইমপোর্ট": KeywordImport,
+		"থেকে":       KeywordFrom,
+		"কম্পোনেন্ট": KeywordComponent, "উপাদান": KeywordComponent,
+	}
+	got := Must(Bengali).Entries()
+	if len(got) != len(want) {
+		t.Fatalf("Bengali entries count = %d want %d: %#v", len(got), len(want), got)
+	}
+	for surface, wantKeyword := range want {
+		if gotKeyword, ok := got[surface]; !ok || gotKeyword != wantKeyword {
+			t.Fatalf("Bengali entry %q = %v,%v want %v,true", surface, gotKeyword, ok, wantKeyword)
+		}
+	}
+}
