@@ -35,7 +35,7 @@ func (l *Lexer) LexAll() []token.Token {
 
 func (l *Lexer) Next() token.Token {
 	for !l.cursor.Done() {
-		if !utf8.ValidString(l.file.Text[l.cursor.Offset:]) {
+		if r, size := l.cursor.Peek(); r == utf8.RuneError && size == 1 {
 			start := l.cursor.Offset
 			l.advanceRune()
 			return l.invalid(start, "I found invalid UTF-8 in this source file.", "Save the GOGO source as UTF-8 and try again.")
@@ -58,6 +58,11 @@ func (l *Lexer) Next() token.Token {
 		return l.identifier(start)
 	}
 	if unicode.IsDigit(r) {
+		if digitValue(r) < 0 {
+			l.advanceRune()
+			l.consumeIdentifierContinuation()
+			return l.invalidNumber(start, "This number uses an unsupported digit.", "Use ASCII digits 0 through 9 in numeric literals.")
+		}
 		return l.number(start)
 	}
 	if r == '"' || r == '\'' {
@@ -124,7 +129,7 @@ func (l *Lexer) skipSpaceAndComments() (token.Token, bool) {
 		if l.cursor.Match("/*") {
 			closed := false
 			for !l.cursor.Done() {
-				if !utf8.ValidString(l.file.Text[l.cursor.Offset:]) {
+				if r, size := l.cursor.Peek(); r == utf8.RuneError && size == 1 {
 					bad := l.cursor.Offset
 					l.advanceRune()
 					l.invalid(bad, "I found invalid UTF-8 in this source file.", "Save the GOGO source as UTF-8 and try again.")
@@ -178,6 +183,7 @@ func (l *Lexer) number(start int) token.Token {
 		if r == '.' {
 			l.advanceRune()
 			if !l.consumeDigits(10) {
+				l.consumeIdentifierContinuation()
 				return l.invalidNumber(start, "This decimal point must be followed by a digit.", "Write a decimal such as 10.5, not 10.")
 			}
 		}
@@ -193,6 +199,7 @@ func (l *Lexer) number(start int) token.Token {
 				}
 			}
 			if !l.consumeDigits(10) {
+				l.consumeIdentifierContinuation()
 				return l.invalidNumber(start, "This exponent is missing digits.", "Write an exponent such as 1e6 or 2.5E-3.")
 			}
 		}
@@ -294,17 +301,20 @@ func (l *Lexer) stringLiteral(start int, quote rune) token.Token {
 			}
 			if escaped == 'x' {
 				if !l.consumeHexEscape(2) {
+					l.consumeRestOfInvalidString(quote)
 					return l.invalidString(start, "This string contains an invalid hexadecimal escape.", "Use an escape such as \\x41.")
 				}
 				continue
 			}
 			if escaped == 'u' {
 				if !l.consumeUnicodeEscape() {
+					l.consumeRestOfInvalidString(quote)
 					return l.invalidString(start, "This string contains an invalid Unicode escape.", "Use \\u0041 or \\u{1F600} with valid hexadecimal digits.")
 				}
 				continue
 			}
 			l.advanceRune()
+			l.consumeRestOfInvalidString(quote)
 			return l.invalidString(start, "This string contains an unsupported escape sequence.", "Use a supported escape sequence.")
 		}
 		if r == quote {
@@ -317,6 +327,16 @@ func (l *Lexer) stringLiteral(start int, quote rune) token.Token {
 		l.advanceRune()
 	}
 	return l.invalidString(start, "This string is missing its closing quote.", "Close the string with the same quote that opened it.")
+}
+
+func (l *Lexer) consumeRestOfInvalidString(quote rune) {
+	for !l.cursor.Done() {
+		r, _ := l.cursor.Peek()
+		l.advanceRune()
+		if r == quote || r == '\n' || r == '\r' {
+			return
+		}
+	}
 }
 
 func (l *Lexer) consumeHexEscape(n int) bool {
