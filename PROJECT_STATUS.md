@@ -81,13 +81,15 @@ Deep audit fixes completed:
 1. Optional member access was lexed and parsed but the optional-access state was not preserved in the AST. `MemberExpr.Optional` now records whether access used `?.`.
 2. A stray top-level `}` could leave the parser at the same token during recovery. Top-level stray closing braces now produce G2034 and advance safely. Block recovery also guarantees forward progress.
 3. `compiler.Session.ParseFile` had been defined in both `session.go` and `session_parse.go`, which would prevent the Go package from compiling. The implementation now has one canonical parser entry point in `session_parse.go`.
-4. Parser and AST documentation was stale about optional chaining. The documentation now matches the implemented AST contract.
+4. Object recovery stopped after the first malformed property even when a comma introduced another recoverable property. Recovery now resumes at the next property after a comma.
+5. Parser and AST documentation was stale about optional chaining. The documentation now matches the implemented AST contract.
+6. Step 3 acceptance tests now verify malformed object recovery in addition to the existing malformed collection and stray-brace tests.
 
-The acceptance suite covers optional member access, all supported assignment operators, right-associative assignments, trailing call arguments, malformed collection recovery, stray closing braces, and AST span preservation.
+The acceptance suite covers optional member access, all supported assignment operators, right-associative assignments, trailing call arguments, malformed collection recovery, malformed object recovery, stray closing braces, and AST span preservation.
 
 ## Runtime validation gate
 
-The CI workflow is configured to run `gofmt`, `go test ./...`, `go vet ./...`, and `go build ./cmd/gogo`. The latest GitHub Actions run still terminates with `startup_failure` before creating a job. Therefore the repository is not being falsely marked runtime-passing.
+The CI workflow is configured to run `gofmt`, `go test ./...`, `go vet ./...`, and `go build ./cmd/gogo`. The latest GitHub Actions run for the current repository head still terminates with `startup_failure` before creating a job. Therefore the repository is not being falsely marked runtime-passing.
 
 The code has undergone source-level verification and corrective changes, but runtime acceptance must still be performed when the repository execution infrastructure is available.
 
