@@ -8,73 +8,50 @@
 - Release target: GOGO 1.0
 - Completed work packages: 1 / 62
 - Current work package: 2, Lexer and token model
-- Status: Step 2 in progress
+- Status: Step 2 implementation complete, validation pending
 
 ## Step 1, Compiler source model and positions
 
 Status: **COMPLETE**
 
-Completed capabilities:
+Step 1 established stable source file IDs, UTF-8 source validation, one-based line and column tracking, zero-based byte offsets, half-open source spans, a Unicode-aware cursor, source path and file invariants, structured diagnostics, compiler-session integration, tests, documentation, the 62-step roadmap, and GitHub Actions CI configuration.
 
-- Go module and compiler CLI foundation.
-- Stable source file IDs.
-- Source file storage and replacement by path.
-- UTF-8 source validation.
-- One-based line and column tracking.
-- Zero-based byte offsets.
-- Half-open source spans.
-- Unicode-aware source cursor.
-- Cursor peek, advance, match, position, and slice operations.
-- Bengali and Hindi source position coverage.
-- Source path and file invariant validation.
-- Structured diagnostics with severity, code, message, hint, and span.
-- Compilation session integration.
-- Human-friendly validation diagnostics.
-- Unit tests covering source, Unicode, diagnostics, and compiler session behavior.
-- Compiler source-model documentation.
-- 62-step master roadmap.
-- GitHub Actions CI configuration.
-
-## Step 1 deep verification record
-
-A repository-level review found and corrected two foundation problems before Step 2 was allowed to start: the compiler referenced a source validation implementation that was missing from the checked file view, and the repository contained two competing validation implementations. The missing implementation was added and the duplicate implementation was removed.
-
-The Go version was aligned to Go 1.23 so the repository can be validated with the available Go 1.23 toolchain without downloading a newer toolchain.
-
-GitHub Actions is configured to run formatting checks, `go test ./...`, `go vet ./...`, and the CLI build. GitHub currently reports `startup_failure` before creating a workflow job, so the Actions service has not supplied an executable CI result. This is tracked explicitly rather than being treated as a passing test.
-
-The source-level Step 1 acceptance review is complete. Step 1 is frozen as the source foundation consumed by all later compiler phases. Future phases must preserve source spans so compiler and editor diagnostics map back to original GOGO source.
+The source foundation is frozen. Later compiler phases must preserve source spans so diagnostics map back to original GOGO source.
 
 ## Step 2, Lexer and token model
 
-Status: **IN PROGRESS**
+Status: **IMPLEMENTATION COMPLETE, VALIDATION PENDING**
 
-Implemented so far:
+Completed implementation:
 
-- Token kind model.
+- Canonical token kind model.
 - Token source spans.
-- Identifier, number, string, punctuation, and operator token categories.
 - Unicode-aware identifier scanning.
+- Integer, decimal, and exponent number scanning.
+- Single and double quoted strings.
+- Supported string escape validation.
+- Punctuation and multi-character operators.
 - Whitespace skipping.
 - Line and block comments.
-- Comment preservation option.
-- String escape scanning.
-- Unterminated string diagnostics.
-- Unterminated block comment diagnostics.
-- Invalid character recovery.
-- Multi-character operator recognition.
-- Bengali and Hindi Unicode token coverage.
-- Lexer tests for tokens, spans, comments, and diagnostics.
+- Optional comment preservation.
+- Invalid-character recovery.
+- Malformed UTF-8 regression handling.
+- Structured lexical diagnostics.
+- Compiler session lexer integration through `Session.LexFile`.
+- Lexer unit tests and fuzz target.
+- Compiler-session integration tests.
+- Lexer and token contract documentation.
 
-Remaining Step 2 acceptance work:
+The authoritative lexer contract is keyword-independent. English, Bengali, Hindi, and future surface grammars can map identifier text to keywords later without changing the scanner.
 
-- Complete lexical literal rules and numeric validation.
-- Define the authoritative keyword-independent token contract for the grammar layer.
-- Add lexer fuzz and regression tests.
-- Add malformed UTF-8 regression coverage at lexer entry.
-- Integrate lexer output into the compiler session pipeline.
-- Validate the full repository with Go formatting, tests, vet, and build.
-- Complete Step 2 documentation.
+Validation still required before Step 2 can be marked fully complete:
+
+- Run `gofmt` validation.
+- Run `go test ./...`.
+- Run `go vet ./...`.
+- Build the CLI with `go build ./cmd/gogo`.
+- Run the lexer fuzz target for a bounded smoke test.
+- Confirm GitHub Actions execution. GitHub previously returned `startup_failure` before creating a job, so that infrastructure limitation is tracked separately and is never treated as a passing CI result.
 
 ## Development rule
 
