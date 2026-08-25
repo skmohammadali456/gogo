@@ -1,35 +1,27 @@
 # GOGO 1.0 Project Status
 
-## Current milestone
+## Current state
 
-Foundation and repository governance.
+- Language: GOGO
+- Compiler implementation language: Go
+- Repository: `skmohammadali786/gogo`
+- Release target: GOGO 1.0
+- Completed work packages: 0 / 62
+- Current work package: 1, Compiler source model and positions
+- Status: In progress
 
-## Progress
+## Quality gate
 
-- 0 / 62 implementation steps completed
-- Repository initialized
-- GitHub is the source of truth
-- Language specification is under active design
+A work package is only marked complete after implementation, tests, integration, documentation, and applicable target validation pass.
 
-## Development policy
+## Current foundation
 
-Each implementation step must include:
+- Go module initialized.
+- CLI entrypoint initialized.
+- Source file, position, and span model added.
+- Structured diagnostic model added.
+- 62-step roadmap added.
 
-1. Design and specification update
-2. Implementation
-3. Unit tests
-4. Integration tests where applicable
-5. Documentation
-6. Examples where applicable
-7. Validation and review
-8. A dedicated Git commit
+## Next implementation
 
-A step is not considered complete until its acceptance criteria pass.
-
-## Current step
-
-Foundation: repository architecture and project governance.
-
-## Next
-
-Create the canonical project structure, Go module, architecture documentation, development rules, and CI foundation before beginning compiler implementation.
+Complete the source model with compiler file management and then move to the lexer and token model.
