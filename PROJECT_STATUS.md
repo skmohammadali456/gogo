@@ -24,23 +24,25 @@ Status: **IMPLEMENTATION COMPLETE, VALIDATION PENDING**
 
 Completed implementation:
 
-- Canonical token kind model.
-- Token source spans.
-- Unicode-aware identifier scanning.
-- Integer, decimal, and exponent number scanning.
+- Canonical token kind model with exact source text and source spans.
+- Keyword-independent lexical design for English, Bengali, and Hindi.
+- Unicode-aware identifiers with letters, combining marks, digits, and `_`.
+- Decimal integers, decimals, exponent notation, numeric separators, hexadecimal, binary, octal, and `n` numeric suffix scanning.
 - Single and double quoted strings.
-- Supported string escape validation.
-- Punctuation and multi-character operators.
-- Whitespace skipping.
+- Simple, hexadecimal, four-digit Unicode, and braced Unicode string escape validation.
+- Arithmetic, assignment, comparison, strict equality, arrows, exponentiation, logical, bitwise, shift, nullish, optional chaining, increment/decrement, and spread operators.
+- Braces, parentheses, brackets, comma, dot, colon, semicolon, and question punctuation.
+- Unicode whitespace skipping.
 - Line and block comments.
 - Optional comment preservation.
 - Invalid-character recovery.
-- Malformed UTF-8 regression handling.
-- Structured lexical diagnostics.
+- Malformed UTF-8 handling.
+- Human-readable structured lexical diagnostics.
 - Compiler session lexer integration through `Session.LexFile`.
 - Lexer unit tests and fuzz target.
+- English, Bengali, and Hindi lexical regression coverage.
 - Compiler-session integration tests.
-- Lexer and token contract documentation.
+- Formal lexer and token contract documentation.
 
 The authoritative lexer contract is keyword-independent. English, Bengali, Hindi, and future surface grammars can map identifier text to keywords later without changing the scanner.
 
@@ -51,7 +53,7 @@ Validation still required before Step 2 can be marked fully complete:
 - Run `go vet ./...`.
 - Build the CLI with `go build ./cmd/gogo`.
 - Run the lexer fuzz target for a bounded smoke test.
-- Confirm GitHub Actions execution. GitHub previously returned `startup_failure` before creating a job, so that infrastructure limitation is tracked separately and is never treated as a passing CI result.
+- Confirm GitHub Actions execution. GitHub previously returned `startup_failure` before creating a workflow job, so that infrastructure limitation is tracked separately and is never treated as a passing CI result.
 
 ## Development rule
 
