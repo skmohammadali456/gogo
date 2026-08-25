@@ -44,7 +44,7 @@ Status: **COMPLETE**. Hindi keywords and natural Hindi forms are implemented thr
 
 **9. Language configuration and aliases**
 
-Define project-level language settings, grammar selection, keyword aliases, strictness modes, source encoding rules, target configuration, and compatibility settings. The compiler must be able to determine which grammar vocabulary a project uses without messy configuration files.
+Status: **COMPLETE**. Project-level `gogo.json` language configuration now resolves language, grammar vocabulary, aliases, strictness, UTF-8 encoding, target, and compatibility into an immutable compiler session configuration without scattered language state. See `docs/compiler/language-configuration.md`.
 
 ### Phase 2, TypeScript-class language system
 

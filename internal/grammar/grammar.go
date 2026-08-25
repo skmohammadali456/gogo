@@ -59,6 +59,36 @@ func (k Keyword) String() string {
 	}
 }
 
+// ParseKeyword resolves a canonical keyword name used by project alias configuration.
+func ParseKeyword(name string) (Keyword, bool) {
+	switch name {
+	case "create":
+		return KeywordCreate, true
+	case "variable":
+		return KeywordVariable, true
+	case "function":
+		return KeywordFunction, true
+	case "as":
+		return KeywordAs, true
+	case "return":
+		return KeywordReturn, true
+	case "if":
+		return KeywordIf, true
+	case "else":
+		return KeywordElse, true
+	case "constant":
+		return KeywordConstant, true
+	case "import":
+		return KeywordImport, true
+	case "from":
+		return KeywordFrom, true
+	case "component":
+		return KeywordComponent, true
+	default:
+		return KeywordUnknown, false
+	}
+}
+
 // Entry defines one surface spelling for a canonical grammar keyword.
 type Entry struct {
 	Surface string

@@ -6,8 +6,8 @@ import (
 	"os"
 
 	"github.com/skmohammadali786/gogo/internal/compiler"
+	"github.com/skmohammadali786/gogo/internal/config"
 	"github.com/skmohammadali786/gogo/internal/diagnostics"
-	"github.com/skmohammadali786/gogo/internal/grammar"
 )
 
 const version = "0.1.0-dev"
@@ -15,7 +15,10 @@ const version = "0.1.0-dev"
 func main() {
 	jsonOut := flag.Bool("json", false, "print diagnostics as JSON")
 	locale := flag.String("locale", "en", "diagnostic language: en, bn, or hi")
-	grammarLanguage := flag.String("grammar", "en", "grammar vocabulary: en, bn, or hi")
+	grammarLanguage := flag.String("grammar", "", "override project language/grammar: en, bn, or hi")
+	strictness := flag.String("strictness", "", "override project strictness: standard, strict, or permissive")
+	target := flag.String("target", "", "override project target (currently ast)")
+	configPath := flag.String("config", "", "project configuration path (default: discover gogo.json)")
 	flag.Parse()
 
 	if flag.NArg() == 0 {
@@ -24,12 +27,31 @@ func main() {
 		return
 	}
 
-	vocab, err := grammar.ForLanguage(grammar.Language(*grammarLanguage))
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(2)
+	raw := config.Raw{}
+	usedConfig := ""
+	if *configPath != "" {
+		loaded, err := config.Load(*configPath)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		raw, usedConfig = loaded, *configPath
+	} else if flag.NArg() > 0 {
+		loaded, path, ok, err := config.LoadDiscover(flag.Arg(0))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		if ok {
+			raw, usedConfig = loaded, path
+		}
 	}
-	s := compiler.NewSession(compiler.WithGrammarVocabulary(vocab))
+	resolved, configDiagnostics := config.Resolve(raw, config.Overrides{Language: *grammarLanguage, Strictness: *strictness, Target: *target, ConfigPath: usedConfig})
+	s := compiler.NewSession(compiler.WithResolvedConfig(resolved))
+	for _, d := range configDiagnostics {
+		d.FilePath = usedConfig
+		s.Diagnostics.Add(d)
+	}
 	for _, path := range flag.Args() {
 		data, err := os.ReadFile(path)
 		if err != nil {
