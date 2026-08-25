@@ -8,9 +8,9 @@ import (
 )
 
 type Parser struct {
-	tokens       []token.Token
-	pos          int
-	diagnostics  diagnostics.Bag
+	tokens      []token.Token
+	pos         int
+	diagnostics diagnostics.Bag
 }
 
 func New(tokens []token.Token) *Parser { return &Parser{tokens: tokens} }
@@ -365,20 +365,23 @@ func (p *Parser) parseObject() ast.Expr {
 		if key.Kind != token.Identifier && key.Kind != token.String {
 			p.error("G2024", "I expected an object property name.", "Use an identifier or string as the property name.")
 			p.recoverObject()
-			break
+			if p.at(token.RBrace) || p.at(token.EOF) { break }
+			continue
 		}
 		p.advance()
 		if !p.at(token.Colon) {
 			p.error("G2025", "I expected ':' after the object property name.", "Write key: value.")
 			p.recoverObject()
-			break
+			if p.at(token.RBrace) || p.at(token.EOF) { break }
+			continue
 		}
 		p.advance()
 		value := p.parseExpression(0)
 		if value == nil {
 			p.error("G2026", "I expected an object property value.", "Give the property a value.")
 			p.recoverObject()
-			break
+			if p.at(token.RBrace) || p.at(token.EOF) { break }
+			continue
 		}
 		properties = append(properties, ast.ObjectProperty{Span: source.Span{Start: key.Span.Start, End: ast.SpanOf(value).End}, Key: key.Text, Value: value})
 		if !p.at(token.Comma) { break }
