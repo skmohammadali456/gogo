@@ -1,6 +1,10 @@
 package compiler
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/skmohammadali786/gogo/internal/token"
+)
 
 func TestSessionAcceptsMultilingualSource(t *testing.T) {
 	s := NewSession()
@@ -17,5 +21,37 @@ func TestSessionRejectsEmptyPath(t *testing.T) {
 	}
 	if !s.HasErrors() {
 		t.Fatal("expected diagnostic for empty path")
+	}
+}
+
+func TestSessionLexFileIntegratesLexerDiagnostics(t *testing.T) {
+	s := NewSession()
+	id := s.AddFile("main.gogo", "create variable value as 10.")
+	if id == 0 {
+		t.Fatal("expected source file to be added")
+	}
+
+	tokens := s.LexFile(id)
+	if len(tokens) != 6 {
+		t.Fatalf("got %d tokens, want 6: %#v", len(tokens), tokens)
+	}
+	if tokens[0].Kind != token.Identifier || tokens[len(tokens)-1].Kind != token.EOF {
+		t.Fatalf("unexpected lexer output: %#v", tokens)
+	}
+	if !s.HasErrors() {
+		t.Fatal("expected lexer diagnostic to be copied into session")
+	}
+	if got := s.Diagnostics.All()[0].Code; got != "G1002" {
+		t.Fatalf("expected G1002, got %s", got)
+	}
+}
+
+func TestSessionLexMissingFile(t *testing.T) {
+	s := NewSession()
+	if tokens := s.LexFile(999); tokens != nil {
+		t.Fatalf("expected nil tokens for missing file, got %#v", tokens)
+	}
+	if len(s.Diagnostics.All()) != 1 || s.Diagnostics.All()[0].Code != "G0003" {
+		t.Fatalf("expected G0003, got %v", s.Diagnostics.All())
 	}
 }

@@ -1,7 +1,6 @@
 package lexer
 
 import (
-	"strings"
 	"unicode"
 	"unicode/utf8"
 
@@ -11,9 +10,9 @@ import (
 )
 
 type Lexer struct {
-	file        source.File
-	cursor      *source.Cursor
-	diagnostics diagnostics.Bag
+	file            source.File
+	cursor          *source.Cursor
+	diagnostics     diagnostics.Bag
 	includeComments bool
 }
 
@@ -70,7 +69,10 @@ func (l *Lexer) Next() token.Token {
 		return l.stringLiteral(start, r)
 	}
 
-	pairs := []struct{ text string; kind token.Kind }{
+	pairs := []struct {
+		text string
+		kind token.Kind
+	}{
 		{"==", token.EqualEqual}, {"!=", token.BangEqual}, {"+=", token.PlusEqual},
 		{"-=", token.MinusEqual}, {"*=", token.StarEqual}, {"/=", token.SlashEqual},
 		{"%=", token.PercentEqual}, {"<=", token.LessEqual}, {">=", token.GreaterEqual},
@@ -109,16 +111,23 @@ func (l *Lexer) skipSpaceAndComments() (token.Token, bool) {
 		if l.cursor.Match("//") {
 			for !l.cursor.Done() {
 				r, _ := l.cursor.Peek()
-				if r == '\n' || r == '\r' { break }
+				if r == '\n' || r == '\r' {
+					break
+				}
 				l.advanceRune()
 			}
-			if l.includeComments { return l.make(token.Comment, start), true }
+			if l.includeComments {
+				return l.make(token.Comment, start), true
+			}
 			continue
 		}
 		if l.cursor.Match("/*") {
 			closed := false
 			for !l.cursor.Done() {
-				if l.cursor.Match("*/") { closed = true; break }
+				if l.cursor.Match("*/") {
+					closed = true
+					break
+				}
 				l.advanceRune()
 			}
 			if !closed {
@@ -128,7 +137,9 @@ func (l *Lexer) skipSpaceAndComments() (token.Token, bool) {
 					Hint: "Add */ to close the comment.", Span: l.span(start),
 				})
 			}
-			if l.includeComments { return l.make(token.Comment, start), true }
+			if l.includeComments {
+				return l.make(token.Comment, start), true
+			}
 			continue
 		}
 		return token.Token{}, false
@@ -139,65 +150,113 @@ func (l *Lexer) skipSpaceAndComments() (token.Token, bool) {
 func (l *Lexer) identifier(start int) token.Token {
 	for !l.cursor.Done() {
 		r, _ := l.cursor.Peek()
-		if !isIdentifierContinue(r) { break }
+		if !isIdentifierContinue(r) {
+			break
+		}
 		l.advanceRune()
 	}
 	return l.make(token.Identifier, start)
 }
 
 func (l *Lexer) number(start int) token.Token {
-	seenDot := false
 	for !l.cursor.Done() {
 		r, _ := l.cursor.Peek()
-		if unicode.IsDigit(r) { l.advanceRune(); continue }
-		if r == '.' && !seenDot {
-			seenDot = true
-			l.advanceRune()
-			continue
+		if !unicode.IsDigit(r) {
+			break
 		}
-		break
+		l.advanceRune()
 	}
-	text := l.file.Text[start:l.cursor.Offset]
-	if strings.HasSuffix(text, ".") {
-		l.diagnostics.Add(diagnostics.Diagnostic{
-			Severity: diagnostics.Error, Code: "G1002",
-			Message: "This number ends with a decimal point.",
-			Hint: "Write a digit after the decimal point, for example 10.5.", Span: l.span(start),
-		})
-		return token.New(token.Invalid, text, l.span(start))
+
+	if !l.cursor.Done() {
+		r, _ := l.cursor.Peek()
+		if r == '.' {
+			l.advanceRune()
+			if l.cursor.Done() {
+				return l.invalidNumber(start, "This number ends with a decimal point.", "Write a digit after the decimal point, for example 10.5.")
+			}
+			r, _ = l.cursor.Peek()
+			if !unicode.IsDigit(r) {
+				return l.invalidNumber(start, "This decimal point must be followed by a digit.", "Write a decimal such as 10.5, not 10.")
+			}
+			for !l.cursor.Done() {
+				r, _ = l.cursor.Peek()
+				if !unicode.IsDigit(r) {
+					break
+				}
+				l.advanceRune()
+			}
+		}
 	}
+
+	if !l.cursor.Done() {
+		r, _ := l.cursor.Peek()
+		if r == 'e' || r == 'E' {
+			l.advanceRune()
+			if !l.cursor.Done() {
+				r, _ = l.cursor.Peek()
+				if r == '+' || r == '-' {
+					l.advanceRune()
+				}
+			}
+			if l.cursor.Done() {
+				return l.invalidNumber(start, "This exponent is missing digits.", "Write an exponent such as 1e6 or 2.5E-3.")
+			}
+			r, _ = l.cursor.Peek()
+			if !unicode.IsDigit(r) {
+				return l.invalidNumber(start, "This exponent is missing digits.", "Write an exponent such as 1e6 or 2.5E-3.")
+			}
+			for !l.cursor.Done() {
+				r, _ = l.cursor.Peek()
+				if !unicode.IsDigit(r) {
+					break
+				}
+				l.advanceRune()
+			}
+		}
+	}
+
 	return l.make(token.Number, start)
 }
 
 func (l *Lexer) stringLiteral(start int, quote rune) token.Token {
 	l.advanceRune()
-	closed := false
 	for !l.cursor.Done() {
 		r, _ := l.cursor.Peek()
 		if r == '\\' {
 			l.advanceRune()
-			if !l.cursor.Done() { l.advanceRune() }
+			if l.cursor.Done() {
+				break
+			}
+			escaped, _ := l.cursor.Peek()
+			if !isValidEscape(escaped) {
+				l.advanceRune()
+				l.diagnostics.Add(diagnostics.Diagnostic{
+					Severity: diagnostics.Error, Code: "G1004",
+					Message: "This string contains an unsupported escape sequence.",
+					Hint: "Use a supported escape sequence.",
+					Span: l.span(start),
+				})
+				return token.New(token.Invalid, l.file.Text[start:l.cursor.Offset], l.span(start))
+			}
+			l.advanceRune()
 			continue
 		}
 		if r == quote {
 			l.advanceRune()
-			closed = true
-			break
+			return l.make(token.String, start)
 		}
 		if r == '\n' || r == '\r' {
 			break
 		}
 		l.advanceRune()
 	}
-	if !closed {
-		l.diagnostics.Add(diagnostics.Diagnostic{
-			Severity: diagnostics.Error, Code: "G1003",
-			Message: "This string is missing its closing quote.",
-			Hint: "Close the string with the same quote that opened it.", Span: l.span(start),
-		})
-		return token.New(token.Invalid, l.file.Text[start:l.cursor.Offset], l.span(start))
-	}
-	return l.make(token.String, start)
+
+	l.diagnostics.Add(diagnostics.Diagnostic{
+		Severity: diagnostics.Error, Code: "G1003",
+		Message: "This string is missing its closing quote.",
+		Hint: "Close the string with the same quote that opened it.", Span: l.span(start),
+	})
+	return token.New(token.Invalid, l.file.Text[start:l.cursor.Offset], l.span(start))
 }
 
 func (l *Lexer) advanceRune() { l.cursor.Advance() }
@@ -213,9 +272,25 @@ func (l *Lexer) invalid(start int, message, hint string) token.Token {
 	return l.make(token.Invalid, start)
 }
 
+func (l *Lexer) invalidNumber(start int, message, hint string) token.Token {
+	l.diagnostics.Add(diagnostics.Diagnostic{
+		Severity: diagnostics.Error, Code: "G1002", Message: message, Hint: hint, Span: l.span(start),
+	})
+	return l.make(token.Invalid, start)
+}
+
 func (l *Lexer) span(start int) source.Span {
 	return source.Span{Start: source.PositionAt(l.file.Text, start), End: source.PositionAt(l.file.Text, l.cursor.Offset)}
 }
 
 func isIdentifierStart(r rune) bool { return r == '_' || unicode.IsLetter(r) }
 func isIdentifierContinue(r rune) bool { return isIdentifierStart(r) || unicode.IsDigit(r) || unicode.IsMark(r) }
+
+func isValidEscape(r rune) bool {
+	switch r {
+	case 'n', 'r', 't', 'b', 'f', 'v', '0', '\\', '"', '\'':
+		return true
+	default:
+		return false
+	}
+}

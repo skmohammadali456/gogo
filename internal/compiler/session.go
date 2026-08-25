@@ -2,7 +2,9 @@ package compiler
 
 import (
 	"github.com/skmohammadali786/gogo/internal/diagnostics"
+	"github.com/skmohammadali786/gogo/internal/lexer"
 	"github.com/skmohammadali786/gogo/internal/source"
+	"github.com/skmohammadali786/gogo/internal/token"
 )
 
 // Session contains state shared by compiler phases for one compilation request.
@@ -38,6 +40,29 @@ func (s *Session) AddFile(path, text string) uint32 {
 		return 0
 	}
 	return id
+}
+
+// LexFile runs the Step 2 lexer for a file already registered in the session.
+// Lexer diagnostics are copied into the session so later compiler phases see
+// one diagnostic stream while every token retains its original source span.
+func (s *Session) LexFile(id uint32) []token.Token {
+	file, ok := s.Files.Get(id)
+	if !ok {
+		s.Diagnostics.Add(diagnostics.Diagnostic{
+			Severity: diagnostics.Error,
+			Code:     "G0003",
+			Message:  "The compiler cannot lex a source file that is not in this session.",
+			Hint:     "Add the file to the compilation session before lexing it.",
+		})
+		return nil
+	}
+
+	l := lexer.New(file)
+	tokens := l.LexAll()
+	for _, diagnostic := range l.Diagnostics() {
+		s.Diagnostics.Add(diagnostic)
+	}
+	return tokens
 }
 
 func (s *Session) HasErrors() bool {
