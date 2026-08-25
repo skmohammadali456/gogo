@@ -7,8 +7,8 @@
 - Repository: `skmohammadali786/gogo`
 - Release target: GOGO 1.0
 - Completed work packages: 1 / 62
-- Current work package: 2, Lexer and token model
-- Status: Step 2 implementation complete, validation pending
+- Current work package: 3, Parser and AST
+- Status: Step 3 implementation in progress. Step 2 runtime validation remains a release gate.
 
 ## Step 1, Compiler source model and positions
 
@@ -16,44 +16,37 @@ Status: **COMPLETE**
 
 Step 1 established stable source file IDs, UTF-8 source validation, one-based line and column tracking, zero-based byte offsets, half-open source spans, a Unicode-aware cursor, source path and file invariants, structured diagnostics, compiler-session integration, tests, documentation, the 62-step roadmap, and GitHub Actions CI configuration.
 
-The source foundation is frozen. Later compiler phases must preserve source spans so diagnostics map back to original GOGO source.
-
 ## Step 2, Lexer and token model
 
-Status: **IMPLEMENTATION COMPLETE, VALIDATION PENDING**
+Status: **IMPLEMENTATION COMPLETE, RUNTIME VALIDATION PENDING**
 
-Completed implementation:
+The implementation includes the canonical token model, exact source text, source spans, Unicode identifiers, English/Bengali/Hindi lexical coverage, numeric and string literal handling, escape validation, operators, punctuation, whitespace, comments, recovery, malformed UTF-8 handling, diagnostics, compiler-session integration, regression tests, fuzz coverage, integration tests, and formal documentation.
 
-- Canonical token kind model with exact source text and source spans.
-- Keyword-independent lexical design for English, Bengali, and Hindi.
-- Unicode-aware identifiers with letters, combining marks, digits, and `_`.
-- Decimal integers, decimals, exponent notation, numeric separators, hexadecimal, binary, octal, and `n` numeric suffix scanning.
-- Single and double quoted strings.
-- Simple, hexadecimal, four-digit Unicode, and braced Unicode string escape validation.
-- Arithmetic, assignment, comparison, strict equality, arrows, exponentiation, logical, bitwise, shift, nullish, optional chaining, increment/decrement, and spread operators.
-- Braces, parentheses, brackets, comma, dot, colon, semicolon, and question punctuation.
-- Unicode whitespace skipping.
-- Line and block comments.
-- Optional comment preservation.
-- Invalid-character recovery.
-- Malformed UTF-8 handling.
-- Human-readable structured lexical diagnostics.
-- Compiler session lexer integration through `Session.LexFile`.
-- Lexer unit tests and fuzz target.
-- English, Bengali, and Hindi lexical regression coverage.
-- Compiler-session integration tests.
-- Formal lexer and token contract documentation.
+The remaining release gate is execution of `gofmt`, `go test ./...`, `go vet ./...`, `go build ./cmd/gogo`, bounded lexer fuzz smoke testing, and GitHub Actions. GitHub Actions has previously returned `startup_failure` before creating a workflow job, so that infrastructure limitation is recorded separately and is never treated as a passing CI result.
 
-The authoritative lexer contract is keyword-independent. English, Bengali, Hindi, and future surface grammars can map identifier text to keywords later without changing the scanner.
+## Step 3, Parser and AST
 
-Validation still required before Step 2 can be marked fully complete:
+Status: **IN PROGRESS**
 
-- Run `gofmt` validation.
-- Run `go test ./...`.
-- Run `go vet ./...`.
-- Build the CLI with `go build ./cmd/gogo`.
-- Run the lexer fuzz target for a bounded smoke test.
-- Confirm GitHub Actions execution. GitHub previously returned `startup_failure` before creating a workflow job, so that infrastructure limitation is tracked separately and is never treated as a passing CI result.
+Implemented foundation:
+
+- Source-spanned AST file model.
+- Identifiers and literals.
+- Unary expressions.
+- Binary expressions with precedence climbing.
+- Function call expressions.
+- Blocks.
+- Expression statements.
+- Variable declarations using the initial GOGO `create variable ... as ...` surface form.
+- Return statements.
+- Human-readable parser diagnostics with G200x codes.
+- Parser error recovery.
+- English, Bengali, and Hindi identifier parsing.
+- Compiler-session `ParseFile` integration.
+- Parser and AST documentation.
+- Parser regression tests.
+
+Remaining Step 3 work will expand the structural grammar required by functions, control flow, collections, object literals, member access, indexing, and other core GOGO syntax, followed by full validation and acceptance.
 
 ## Development rule
 
