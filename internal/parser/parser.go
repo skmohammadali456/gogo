@@ -13,7 +13,7 @@ type Parser struct {
 	diagnostics diagnostics.Bag
 }
 
-func New(tokens []token.Token) *Parser { return &Parser{tokens: tokens} }
+func New(tokens []token.Token) *Parser                  { return &Parser{tokens: tokens} }
 func (p *Parser) Diagnostics() []diagnostics.Diagnostic { return p.diagnostics.All() }
 
 func (p *Parser) ParseFile() ast.File {
@@ -49,20 +49,36 @@ func (p *Parser) parseStatement() ast.Stmt {
 		p.advance()
 		return nil
 	}
-	if p.atIdentifier("create") { return p.parseCreate() }
-	if p.atIdentifier("return") { return p.parseReturn() }
-	if p.atIdentifier("if") { return p.parseIf() }
-	if p.at(token.LBrace) { return p.parseBlock() }
+	if p.atIdentifier("create") {
+		return p.parseCreate()
+	}
+	if p.atIdentifier("return") {
+		return p.parseReturn()
+	}
+	if p.atIdentifier("if") {
+		return p.parseIf()
+	}
+	if p.at(token.LBrace) {
+		return p.parseBlock()
+	}
 	expr := p.parseExpression(0)
-	if expr == nil { return nil }
-	if p.at(token.Semicolon) { p.advance() }
+	if expr == nil {
+		return nil
+	}
+	if p.at(token.Semicolon) {
+		p.advance()
+	}
 	return ast.ExprStmt{Span: ast.SpanOf(expr), Expression: expr}
 }
 
 func (p *Parser) parseCreate() ast.Stmt {
 	start := p.advance().Span.Start
-	if p.atIdentifier("variable") { return p.parseVariable(start) }
-	if p.atIdentifier("function") { return p.parseFunction(start) }
+	if p.atIdentifier("variable") {
+		return p.parseVariable(start)
+	}
+	if p.atIdentifier("function") {
+		return p.parseFunction(start)
+	}
 	p.error("G2001", "I expected 'variable' or 'function' after 'create'.", "Write create variable name as value, or create function name(...).")
 	p.recoverStatement()
 	return nil
@@ -85,7 +101,9 @@ func (p *Parser) parseVariable(start source.Position) ast.Stmt {
 		p.error("G2004", "I expected a value for this variable.", "Give the variable an initial value.")
 		return nil
 	}
-	if p.at(token.Semicolon) { p.advance() }
+	if p.at(token.Semicolon) {
+		p.advance()
+	}
 	return ast.VariableDecl{Span: source.Span{Start: start, End: ast.SpanOf(value).End}, Name: ast.Identifier{Span: name.Span, Name: name.Text}, Value: value}
 }
 
@@ -111,9 +129,13 @@ func (p *Parser) parseFunction(start source.Position) ast.Stmt {
 				return nil
 			}
 			params = append(params, ast.Identifier{Span: param.Span, Name: param.Text})
-			if !p.at(token.Comma) { break }
+			if !p.at(token.Comma) {
+				break
+			}
 			p.advance()
-			if p.at(token.RParen) { break }
+			if p.at(token.RParen) {
+				break
+			}
 		}
 	}
 	if !p.at(token.RParen) {
@@ -123,7 +145,9 @@ func (p *Parser) parseFunction(start source.Position) ast.Stmt {
 	}
 	p.advance()
 	body, ok := p.parseBlockRequired("G2015", "I expected a function body.", "Add { ... } after the function declaration.")
-	if !ok { return nil }
+	if !ok {
+		return nil
+	}
 	return ast.FunctionDecl{Span: source.Span{Start: start, End: body.Span.End}, Name: ast.Identifier{Span: name.Span, Name: name.Text}, Parameters: params, Body: body}
 }
 
@@ -135,16 +159,22 @@ func (p *Parser) parseIf() ast.Stmt {
 		return nil
 	}
 	then, ok := p.parseBlockRequired("G2017", "I expected a block after the if condition.", "Add { ... } for the conditional body.")
-	if !ok { return nil }
+	if !ok {
+		return nil
+	}
 	var elseBlock *ast.BlockStmt
 	if p.atIdentifier("else") {
 		p.advance()
 		block, ok := p.parseBlockRequired("G2018", "I expected a block after 'else'.", "Add { ... } for the else body.")
-		if !ok { return nil }
+		if !ok {
+			return nil
+		}
 		elseBlock = &block
 	}
 	end := then.Span.End
-	if elseBlock != nil { end = elseBlock.Span.End }
+	if elseBlock != nil {
+		end = elseBlock.Span.End
+	}
 	return ast.IfStmt{Span: source.Span{Start: start, End: end}, Condition: condition, Then: then, Else: elseBlock}
 }
 
@@ -159,7 +189,9 @@ func (p *Parser) parseReturn() ast.Stmt {
 		p.error("G2005", "I expected a value after 'return'.", "Return a value or use a grammar form that explicitly permits an empty return.")
 		return nil
 	}
-	if p.at(token.Semicolon) { p.advance() }
+	if p.at(token.Semicolon) {
+		p.advance()
+	}
 	return ast.ReturnStmt{Span: source.Span{Start: start, End: ast.SpanOf(value).End}, Value: value}
 }
 
@@ -197,14 +229,20 @@ func (p *Parser) parseBlock() ast.Stmt {
 
 func (p *Parser) parseExpression(minPrec int) ast.Expr {
 	left := p.parsePrefix()
-	if left == nil { return nil }
+	if left == nil {
+		return nil
+	}
 	for {
 		op := p.current()
 		prec := precedence(op.Kind)
-		if prec < minPrec { break }
+		if prec < minPrec {
+			break
+		}
 		p.advance()
 		rightMin := prec + 1
-		if isRightAssociative(op.Kind) { rightMin = prec }
+		if isRightAssociative(op.Kind) {
+			rightMin = prec
+		}
 		right := p.parseExpression(rightMin)
 		if right == nil {
 			p.error("G2007", "I expected an expression after this operator.", "Add a value after the operator.")
@@ -289,7 +327,9 @@ func (p *Parser) parsePostfix(expr ast.Expr) ast.Expr {
 			optional := p.at(token.QuestionDot)
 			p.advance()
 			name := p.expect(token.Identifier, "G2020", "I expected a member name after property access.", "Add a property or method name.")
-			if name.Kind == token.Invalid { return expr }
+			if name.Kind == token.Invalid {
+				return expr
+			}
 			expr = ast.MemberExpr{Span: source.Span{Start: start, End: name.Span.End}, Object: expr, Name: name.Text, Optional: optional}
 		case p.at(token.LBracket):
 			start := ast.SpanOf(expr).Start
@@ -301,7 +341,9 @@ func (p *Parser) parsePostfix(expr ast.Expr) ast.Expr {
 			}
 			close := p.expect(token.RBracket, "G2022", "This index expression is missing a closing bracket.", "Add ] to close the index.")
 			end := ast.SpanOf(index).End
-			if close.Kind != token.Invalid { end = close.Span.End }
+			if close.Kind != token.Invalid {
+				end = close.Span.End
+			}
 			expr = ast.IndexExpr{Span: source.Span{Start: start, End: end}, Object: expr, Index: index}
 		default:
 			return expr
@@ -321,9 +363,13 @@ func (p *Parser) parseCall(callee ast.Expr) ast.Expr {
 				break
 			}
 			args = append(args, expr)
-			if !p.at(token.Comma) { break }
+			if !p.at(token.Comma) {
+				break
+			}
 			p.advance()
-			if p.at(token.RParen) { break }
+			if p.at(token.RParen) {
+				break
+			}
 		}
 	}
 	end := p.current().Span.End
@@ -345,7 +391,9 @@ func (p *Parser) parseArray() ast.Expr {
 			break
 		}
 		items = append(items, expr)
-		if !p.at(token.Comma) { break }
+		if !p.at(token.Comma) {
+			break
+		}
 		p.advance()
 	}
 	end := p.current().Span.End
@@ -365,14 +413,18 @@ func (p *Parser) parseObject() ast.Expr {
 		if key.Kind != token.Identifier && key.Kind != token.String {
 			p.error("G2024", "I expected an object property name.", "Use an identifier or string as the property name.")
 			p.recoverObject()
-			if p.at(token.RBrace) || p.at(token.EOF) { break }
+			if p.at(token.RBrace) || p.at(token.EOF) {
+				break
+			}
 			continue
 		}
 		p.advance()
 		if !p.at(token.Colon) {
 			p.error("G2025", "I expected ':' after the object property name.", "Write key: value.")
 			p.recoverObject()
-			if p.at(token.RBrace) || p.at(token.EOF) { break }
+			if p.at(token.RBrace) || p.at(token.EOF) {
+				break
+			}
 			continue
 		}
 		p.advance()
@@ -380,11 +432,15 @@ func (p *Parser) parseObject() ast.Expr {
 		if value == nil {
 			p.error("G2026", "I expected an object property value.", "Give the property a value.")
 			p.recoverObject()
-			if p.at(token.RBrace) || p.at(token.EOF) { break }
+			if p.at(token.RBrace) || p.at(token.EOF) {
+				break
+			}
 			continue
 		}
 		properties = append(properties, ast.ObjectProperty{Span: source.Span{Start: key.Span.Start, End: ast.SpanOf(value).End}, Key: key.Text, Value: value})
-		if !p.at(token.Comma) { break }
+		if !p.at(token.Comma) {
+			break
+		}
 		p.advance()
 	}
 	end := p.current().Span.End
@@ -397,8 +453,12 @@ func (p *Parser) parseObject() ast.Expr {
 }
 
 func (p *Parser) recoverObject() {
-	for !p.at(token.EOF) && !p.at(token.Comma) && !p.at(token.RBrace) { p.advance() }
-	if p.at(token.Comma) { p.advance() }
+	for !p.at(token.EOF) && !p.at(token.Comma) && !p.at(token.RBrace) {
+		p.advance()
+	}
+	if p.at(token.Comma) {
+		p.advance()
+	}
 }
 
 func precedence(k token.Kind) int {
@@ -451,21 +511,27 @@ func isAssignable(expr ast.Expr) bool {
 }
 
 func (p *Parser) current() token.Token {
-	if p.pos >= len(p.tokens) { return token.New(token.EOF, "", source.Span{}) }
+	if p.pos >= len(p.tokens) {
+		return token.New(token.EOF, "", source.Span{})
+	}
 	return p.tokens[p.pos]
 }
 
 func (p *Parser) advance() token.Token {
 	t := p.current()
-	if p.pos < len(p.tokens) { p.pos++ }
+	if p.pos < len(p.tokens) {
+		p.pos++
+	}
 	return t
 }
 
-func (p *Parser) at(k token.Kind) bool { return p.current().Kind == k }
+func (p *Parser) at(k token.Kind) bool       { return p.current().Kind == k }
 func (p *Parser) atIdentifier(s string) bool { return p.at(token.Identifier) && p.current().Text == s }
 
 func (p *Parser) expect(k token.Kind, code, message, hint string) token.Token {
-	if p.at(k) { return p.advance() }
+	if p.at(k) {
+		return p.advance()
+	}
 	p.error(code, message, hint)
 	return token.New(token.Invalid, "", p.current().Span)
 }
@@ -475,6 +541,10 @@ func (p *Parser) error(code, message, hint string) {
 }
 
 func (p *Parser) recoverStatement() {
-	for !p.at(token.EOF) && !p.at(token.Semicolon) && !p.at(token.RBrace) { p.advance() }
-	if p.at(token.Semicolon) { p.advance() }
+	for !p.at(token.EOF) && !p.at(token.Semicolon) && !p.at(token.RBrace) {
+		p.advance()
+	}
+	if p.at(token.Semicolon) {
+		p.advance()
+	}
 }
