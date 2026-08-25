@@ -6,6 +6,7 @@ type ArrayExpr struct {
 	Span  source.Span
 	Items []Expr
 }
+
 func (ArrayExpr) node() {}
 func (ArrayExpr) expr() {}
 
@@ -19,14 +20,17 @@ type ObjectExpr struct {
 	Span       source.Span
 	Properties []ObjectProperty
 }
+
 func (ObjectExpr) node() {}
 func (ObjectExpr) expr() {}
 
 type MemberExpr struct {
-	Span   source.Span
-	Object Expr
-	Name   string
+	Span     source.Span
+	Object   Expr
+	Name     string
+	Optional bool
 }
+
 func (MemberExpr) node() {}
 func (MemberExpr) expr() {}
 
@@ -35,5 +39,6 @@ type IndexExpr struct {
 	Object Expr
 	Index  Expr
 }
+
 func (IndexExpr) node() {}
 func (IndexExpr) expr() {}
