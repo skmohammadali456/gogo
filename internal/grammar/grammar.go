@@ -24,6 +24,10 @@ const (
 	KeywordReturn
 	KeywordIf
 	KeywordElse
+	KeywordConstant
+	KeywordImport
+	KeywordFrom
+	KeywordComponent
 )
 
 func (k Keyword) String() string {
@@ -42,6 +46,14 @@ func (k Keyword) String() string {
 		return "if"
 	case KeywordElse:
 		return "else"
+	case KeywordConstant:
+		return "constant"
+	case KeywordImport:
+		return "import"
+	case KeywordFrom:
+		return "from"
+	case KeywordComponent:
+		return "component"
 	default:
 		return "unknown"
 	}
@@ -93,6 +105,8 @@ var vocabularies = map[Language]Vocabulary{
 	English: NewVocabulary(English, "English", []Entry{
 		{"create", KeywordCreate}, {"variable", KeywordVariable}, {"function", KeywordFunction},
 		{"as", KeywordAs}, {"return", KeywordReturn}, {"if", KeywordIf}, {"else", KeywordElse},
+		{"constant", KeywordConstant}, {"import", KeywordImport}, {"from", KeywordFrom}, {"component", KeywordComponent},
+		{"let", KeywordVariable}, {"var", KeywordVariable}, {"const", KeywordConstant}, {"fn", KeywordFunction},
 	}),
 	Bengali: NewVocabulary(Bengali, "Bengali", []Entry{
 		{"তৈরি", KeywordCreate}, {"চলক", KeywordVariable}, {"ফাংশন", KeywordFunction},

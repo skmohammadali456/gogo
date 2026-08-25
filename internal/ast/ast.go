@@ -64,10 +64,12 @@ func (CallExpr) node() {}
 func (CallExpr) expr() {}
 
 type FunctionDecl struct {
-	Span       source.Span
-	Name       Identifier
-	Parameters []Identifier
-	Body       BlockStmt
+	Span           source.Span
+	Name           Identifier
+	Parameters     []Identifier
+	ParameterTypes []*TypeRef
+	ReturnType     *TypeRef
+	Body           BlockStmt
 }
 
 func (FunctionDecl) node() {}
@@ -102,6 +104,7 @@ func (ExprStmt) stmt() {}
 type VariableDecl struct {
 	Span  source.Span
 	Name  Identifier
+	Type  *TypeRef
 	Value Expr
 }
 
@@ -145,6 +148,10 @@ func SpanOf(n Node) source.Span {
 	case VariableDecl:
 		return v.Span
 	case ReturnStmt:
+		return v.Span
+	case ImportDecl:
+		return v.Span
+	case ComponentDecl:
 		return v.Span
 	case ArrayExpr:
 		return v.Span

@@ -6,9 +6,9 @@
 - Compiler implementation language: Go
 - Repository: `skmohammadali786/gogo`
 - Release target: GOGO 1.0
-- Completed work packages: 5 / 62
-- Current work package: 5, complete
-- Status: Steps 1, 2, 3, 4, and 5 are complete. Step 5 is ready for review; Step 6 has not started.
+- Completed work packages: 6 / 62
+- Current work package: 6, complete
+- Status: Steps 1, 2, 3, 4, 5, and 6 are complete. Step 6 is ready for review; Step 7 has not started.
 
 ## Step 1, Compiler source model and positions
 
@@ -102,6 +102,14 @@ Status: **COMPLETE**
 Step 5 adds the data-driven grammar abstraction layer in `internal/grammar`. The lexer continues to emit canonical token kinds and exact source text, while parser instances resolve identifier tokens through an active per-session vocabulary into canonical semantic keywords. English, Bengali, and Hindi vocabularies map to one parser, one semantic AST, and one compiler pipeline. Unknown localized words remain identifiers unless reserved by the active vocabulary, and mixed keyword vocabularies are rejected by normal parser diagnostics rather than silently reinterpreted.
 
 Runtime validation completed locally on 2026-08-25 with `gofmt -l .`, `go test ./...`, `go vet ./...`, `go build ./cmd/gogo`, `go test -race ./...`, and parser fuzz smoke testing.
+
+## Step 6, English grammar
+
+Status: **COMPLETE**
+
+Step 6 establishes the canonical primary English surface grammar in `internal/grammar` and `docs/compiler/english-grammar.md` while preserving the Step 5 single-parser architecture. English readable forms such as `create variable user as "Alex"` and concise aliases such as `let user as "Alex"` resolve through canonical grammar keywords into semantic AST nodes. The implementation covers reserved words, aliases, declarations, assignment expressions, newlines and semicolon termination, conditionals, functions with parameter and return type annotations, contextual type references, imports, component declarations with properties and statement children, operator precedence, associativity, ambiguity rules, diagnostics, recovery, Unicode identifiers, and parser fuzz protection. Step 7 Bengali grammar work has not started.
+
+Runtime validation completed locally on 2026-08-25 with `gofmt -l .`, `go test ./...`, `go vet ./...`, `go build ./cmd/gogo`, `go test -race ./...`, lexer fuzz smoke testing, and parser fuzz smoke testing.
 
 ## Runtime validation gate
 
