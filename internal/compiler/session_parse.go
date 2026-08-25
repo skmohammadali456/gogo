@@ -17,10 +17,12 @@ func (s *Session) ParseFile(id uint32) (ast.File, bool) {
 	l := lexer.New(file)
 	p := parser.New(l.LexAll())
 	for _, d := range l.Diagnostics() {
+		d.FileID = id
 		s.Diagnostics.Add(d)
 	}
 	result := p.ParseFile()
 	for _, d := range p.Diagnostics() {
+		d.FileID = id
 		s.Diagnostics.Add(d)
 	}
 	return result, true

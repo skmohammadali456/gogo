@@ -6,8 +6,8 @@
 - Compiler implementation language: Go
 - Repository: `skmohammadali786/gogo`
 - Release target: GOGO 1.0
-- Completed work packages: 1 / 62
-- Current work package: 3, Parser and AST
+- Completed work packages: 3 / 62
+- Current work package: 4, Compiler diagnostics
 - Status: Steps 1, 2, and 3 have completed a deep source audit and corrective pass. Runtime acceptance remains blocked because GitHub Actions currently ends in `startup_failure` before creating a job.
 
 ## Step 1, Compiler source model and positions
@@ -86,6 +86,12 @@ Deep audit fixes completed:
 6. Step 3 acceptance tests now verify malformed object recovery in addition to the existing malformed collection and stray-brace tests.
 
 The acceptance suite covers optional member access, all supported assignment operators, right-associative assignments, trailing call arguments, malformed collection recovery, malformed object recovery, stray closing braces, and AST span preservation.
+
+## Step 4, Compiler diagnostics
+
+Status: **IMPLEMENTED, RUNTIME VALIDATION PENDING**
+
+Step 4 adds the shared diagnostic subsystem used by lexer, parser, compiler sessions, and the CLI. Diagnostics now have stable codes, severity levels, source spans, primary labels, notes, hints, suggestions, fix-it edit data, deterministic ordering, deduplication, human-friendly snippet and caret rendering, multiline and UTF-8-safe position support, JSON output, and English/Bengali/Hindi rendering hooks.
 
 ## Runtime validation gate
 

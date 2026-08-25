@@ -1,0 +1,10 @@
+error[G2006]: This block is missing its closing brace.
+ --> main.gogo:1:1
+   1 | create function greet() {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+   2 |   return "hi"
+     | ^^^^^^^^^^^^^
+primary: open block starts here at 1:1
+secondary: parser reached end of file at 2:14
+hint: Add } to close the block.
+suggestion: insert closing brace
