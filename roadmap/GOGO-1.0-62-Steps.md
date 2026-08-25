@@ -5,7 +5,7 @@ GOGO is being developed as a Go-powered, TypeScript-class frontend and UI progra
 | # | Work package | Status |
 |---:|---|---|
 | 1 | Compiler source model and positions | **Complete** |
-| 2 | Lexer and token model | Next |
+| 2 | Lexer and token model | **In progress** |
 | 3 | Parser and AST | Planned |
 | 4 | Compiler diagnostics | Planned |
 | 5 | Grammar abstraction | Planned |
@@ -71,17 +71,16 @@ GOGO is being developed as a Go-powered, TypeScript-class frontend and UI progra
 
 Step 1 is complete. It established the source foundation used by all later compiler phases: stable file identity, UTF-8 validation, byte offsets, line and column positions, source spans, Unicode cursor operations, source invariants, structured diagnostics, and compilation session integration. It also includes unit tests, multilingual test coverage, technical documentation, and CI configuration.
 
-Deep local verification passed with Go 1.23.2 in the available offline environment:
+A deep repository review found and corrected a missing source validation implementation and a duplicate validation implementation. The Go version was also aligned to Go 1.23 so the project can be validated with the available toolchain without downloading another toolchain.
 
-```text
-gofmt -w .
-go test ./...
-go vet ./...
-go build ./internal/compiler
-```
+GitHub Actions is configured for formatting, tests, vet, and CLI build, but the Actions service has been returning `startup_failure` before creating a job. This infrastructure limitation is tracked separately and is not treated as a passing CI result.
 
-All tests passed, vet passed, and the compiler package built successfully. The repository's GitHub Actions service currently reports `startup_failure` before creating a job, so that external execution issue is tracked separately from the passing local validation.
+## Step 2 acceptance record
+
+Step 2 is in progress. The lexer foundation now contains a canonical token kind model, source spans, Unicode identifier scanning, numbers, strings, punctuation, operators, whitespace handling, line and block comments, invalid-character recovery, lexer diagnostics, and tests.
+
+Remaining Step 2 acceptance work includes complete literal validation, lexer and compiler-session integration, fuzz and regression coverage, malformed UTF-8 lexer entry handling, documentation, and full repository validation.
 
 ## Completion rule
 
-A step is complete only when its implementation, tests, integration, documentation, and applicable target validation are finished. If external CI infrastructure is unavailable, the repository records the limitation explicitly and the same validation is executed locally in a reproducible environment before completion is declared.
+A step is complete only when its implementation, tests, integration, documentation, and applicable target validation are finished. External CI limitations must be recorded explicitly rather than hidden.
