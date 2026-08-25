@@ -28,7 +28,7 @@ Turn diagnostics into a complete compiler subsystem. Add diagnostic codes, sever
 
 **5. Grammar abstraction**
 
-Create the grammar layer that separates language meaning from surface wording. A single semantic AST and compiler pipeline should accept multiple keyword vocabularies. Grammar definitions must be data-driven enough to support English, Bengali, and Hindi without creating three different programming languages internally.
+Create the grammar layer that separates language meaning from surface wording. A single semantic AST and compiler pipeline should accept multiple keyword vocabularies. Grammar definitions must be data-driven enough to support English, Bengali, and Hindi without creating three different programming languages internally. See `docs/compiler/grammar-abstraction.md` for the Step 5 architecture, built-in vocabularies, active vocabulary selection, mixed-language behavior, AST equivalence, source-span preservation, diagnostics integration, and contributor guidance for adding another vocabulary.
 
 **6. English grammar**
 

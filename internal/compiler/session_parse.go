@@ -16,7 +16,7 @@ func (s *Session) ParseFile(id uint32) (ast.File, bool) {
 		return ast.File{}, false
 	}
 	l := lexer.New(file)
-	p := parser.New(l.LexAll())
+	p := parser.New(l.LexAll(), parser.WithVocabulary(s.vocabulary))
 	for _, d := range l.Diagnostics() {
 		d.FileID = id
 		s.Diagnostics.Add(d)

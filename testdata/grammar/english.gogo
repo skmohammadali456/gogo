@@ -1,0 +1,2 @@
+create variable user as "Alex"
+create function greet(name) { if name { return user } else { return name } }

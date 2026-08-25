@@ -3,6 +3,7 @@ package parser
 import (
 	"github.com/skmohammadali786/gogo/internal/ast"
 	"github.com/skmohammadali786/gogo/internal/diagnostics"
+	"github.com/skmohammadali786/gogo/internal/grammar"
 	"github.com/skmohammadali786/gogo/internal/source"
 	"github.com/skmohammadali786/gogo/internal/token"
 )
@@ -10,10 +11,25 @@ import (
 type Parser struct {
 	tokens      []token.Token
 	pos         int
+	vocabulary  grammar.Vocabulary
 	diagnostics diagnostics.Bag
 }
 
-func New(tokens []token.Token) *Parser                  { return &Parser{tokens: tokens} }
+// Option configures a parser instance.
+type Option func(*Parser)
+
+// WithVocabulary selects the active surface vocabulary for this parser.
+func WithVocabulary(v grammar.Vocabulary) Option {
+	return func(p *Parser) { p.vocabulary = v }
+}
+
+func New(tokens []token.Token, opts ...Option) *Parser {
+	p := &Parser{tokens: tokens, vocabulary: grammar.DefaultVocabulary()}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
+}
 func (p *Parser) Diagnostics() []diagnostics.Diagnostic { return p.diagnostics.All() }
 
 func (p *Parser) ParseFile() ast.File {
@@ -49,13 +65,13 @@ func (p *Parser) parseStatement() ast.Stmt {
 		p.advance()
 		return nil
 	}
-	if p.atIdentifier("create") {
+	if p.atKeyword(grammar.KeywordCreate) {
 		return p.parseCreate()
 	}
-	if p.atIdentifier("return") {
+	if p.atKeyword(grammar.KeywordReturn) {
 		return p.parseReturn()
 	}
-	if p.atIdentifier("if") {
+	if p.atKeyword(grammar.KeywordIf) {
 		return p.parseIf()
 	}
 	if p.at(token.LBrace) {
@@ -67,16 +83,19 @@ func (p *Parser) parseStatement() ast.Stmt {
 	}
 	if p.at(token.Semicolon) {
 		p.advance()
+	} else if !p.at(token.EOF) && !p.at(token.RBrace) {
+		p.error("G2035", "I found extra tokens after this expression statement.", "Separate statements with semicolons or write a complete declaration/control-flow form for the selected grammar.")
+		p.recoverStatement()
 	}
 	return ast.ExprStmt{Span: ast.SpanOf(expr), Expression: expr}
 }
 
 func (p *Parser) parseCreate() ast.Stmt {
 	start := p.advance().Span.Start
-	if p.atIdentifier("variable") {
+	if p.atKeyword(grammar.KeywordVariable) {
 		return p.parseVariable(start)
 	}
-	if p.atIdentifier("function") {
+	if p.atKeyword(grammar.KeywordFunction) {
 		return p.parseFunction(start)
 	}
 	p.error("G2001", "I expected 'variable' or 'function' after 'create'.", "Write create variable name as value, or create function name(...).")
@@ -91,7 +110,7 @@ func (p *Parser) parseVariable(start source.Position) ast.Stmt {
 		p.recoverStatement()
 		return nil
 	}
-	if !p.atIdentifier("as") {
+	if !p.atKeyword(grammar.KeywordAs) {
 		p.error("G2003", "I expected 'as' after the variable name.", "Write create variable name as value.")
 		return nil
 	}
@@ -163,7 +182,7 @@ func (p *Parser) parseIf() ast.Stmt {
 		return nil
 	}
 	var elseBlock *ast.BlockStmt
-	if p.atIdentifier("else") {
+	if p.atKeyword(grammar.KeywordElse) {
 		p.advance()
 		block, ok := p.parseBlockRequired("G2018", "I expected a block after 'else'.", "Add { ... } for the else body.")
 		if !ok {
@@ -525,8 +544,14 @@ func (p *Parser) advance() token.Token {
 	return t
 }
 
-func (p *Parser) at(k token.Kind) bool       { return p.current().Kind == k }
-func (p *Parser) atIdentifier(s string) bool { return p.at(token.Identifier) && p.current().Text == s }
+func (p *Parser) at(k token.Kind) bool { return p.current().Kind == k }
+func (p *Parser) atKeyword(k grammar.Keyword) bool {
+	if !p.at(token.Identifier) {
+		return false
+	}
+	actual, ok := p.vocabulary.Lookup(p.current().Text)
+	return ok && actual == k
+}
 
 func (p *Parser) expect(k token.Kind, code, message, hint string) token.Token {
 	if p.at(k) {

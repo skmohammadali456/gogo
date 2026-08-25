@@ -7,6 +7,7 @@ import (
 
 	"github.com/skmohammadali786/gogo/internal/compiler"
 	"github.com/skmohammadali786/gogo/internal/diagnostics"
+	"github.com/skmohammadali786/gogo/internal/grammar"
 )
 
 const version = "0.1.0-dev"
@@ -14,6 +15,7 @@ const version = "0.1.0-dev"
 func main() {
 	jsonOut := flag.Bool("json", false, "print diagnostics as JSON")
 	locale := flag.String("locale", "en", "diagnostic language: en, bn, or hi")
+	grammarLanguage := flag.String("grammar", "en", "grammar vocabulary: en, bn, or hi")
 	flag.Parse()
 
 	if flag.NArg() == 0 {
@@ -22,7 +24,12 @@ func main() {
 		return
 	}
 
-	s := compiler.NewSession()
+	vocab, err := grammar.ForLanguage(grammar.Language(*grammarLanguage))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+	s := compiler.NewSession(compiler.WithGrammarVocabulary(vocab))
 	for _, path := range flag.Args() {
 		data, err := os.ReadFile(path)
 		if err != nil {
