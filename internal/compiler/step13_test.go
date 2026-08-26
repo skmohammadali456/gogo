@@ -89,8 +89,8 @@ func TestStep13EnglishBengaliHindiUnicodeSource(t *testing.T) {
 	}{
 		{grammar.English, `let নাম as Optional<String> as "আদা"
 if নাম { let inner as String as নাম }`},
-		{grammar.Bengali, `চলক नाम হিসেবে Optional<String> হিসেবে "आशा"
-যদি नाम { চলক inner হিসেবে String হিসেবে name }`},
+		{grammar.Bengali, `চলক नाम হিসেবে Optional<String> হিসেবে "आশा"
+যদি नाम { চলক inner হিসেবে String হিসেবে नाम }`},
 		{grammar.Hindi, `चर নাম रूप Optional<String> रूप "আশা"
 अगर নাম { चर inner रूप String रूप নাম }`},
 	}
@@ -127,12 +127,52 @@ func TestStep13MalformedSyntaxRecoveryAndLocalizedDiagnostics(t *testing.T) {
 	}
 }
 
-func TestStep13ExhaustivenessNonExhaustiveCases(t *testing.T) {
+func TestStep13DiscriminatedConditionalDoesNotRequireAnElse(t *testing.T) {
 	ds := compileStep13(t, grammar.English, `create type A as Object{kind: "a", a: String}
 create type B as Object{kind: "b", b: Number}
 let state as A | B as {kind: "a", a: "x"}
 if state.kind == "a" { let a as A as state }`)
-	if !hasCode(ds, "G3009") {
-		t.Fatalf("want non-exhaustive diagnostic: %#v", ds)
+	if hasCode(ds, "G3009") {
+		t.Fatalf("an ordinary conditional must not be diagnosed as non-exhaustive: %#v", ds)
 	}
+}
+
+func TestStep13NarrowingSoundnessRegressions(t *testing.T) {
+	ds := compileStep13(t, grammar.English, `create type A as Object{kind: "a", a: String}
+create type B as Object{kind: "b", b: Number}
+let state as A | B as {kind: "a", a: "x"}
+let unsafe as state.a
+if state.kind != "a" { let b as B as state }
+fn broken(input as Optional<String>) as Number { if input { return input } return 1 }
+variable value as Optional<String> as "x"
+if value { value = "replacement" }
+let afterAssignment as String as value`)
+	if countCode(ds, "G3002") < 2 || !hasCode(ds, "G3007") {
+		t.Fatalf("want unsafe member, return, and post-assignment narrowing diagnostics: %#v", ds)
+	}
+}
+
+func TestStep13PropertyExistenceNarrowing(t *testing.T) {
+	noStep13Diag(t, `create type A as Object{a: String}
+create type B as Object{b: Number}
+let state as A | B as {a: "x"}
+if state.a { let a as A as state } else { let b as B as state }`)
+}
+
+func TestStep13UnionHasNoImplicitTruthiness(t *testing.T) {
+	ds := compileStep13(t, grammar.English, `let value as String | Number as "x"
+if value { let x as String | Number as value }`)
+	if !hasCode(ds, "G3008") {
+		t.Fatalf("want undefined union truthiness diagnostic: %#v", ds)
+	}
+}
+
+func countCode(ds []diagnostics.Diagnostic, code string) int {
+	count := 0
+	for _, d := range ds {
+		if d.Code == code {
+			count++
+		}
+	}
+	return count
 }
