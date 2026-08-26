@@ -71,7 +71,7 @@ Unicode whitespace is skipped. `//` starts a line comment. `/*` and `*/` delimit
 
 ## Recovery and UTF-8
 
-Invalid UTF-8 is diagnosed at the lexer boundary, including when malformed bytes occur inside source that would otherwise be whitespace or comments. Unknown characters become `Invalid` tokens and advance the cursor, preventing a single bad character from trapping the lexer.
+Invalid UTF-8 is diagnosed at the lexer boundary, including when malformed bytes occur inside source that would otherwise be whitespace, comments, or strings. Unknown characters become `Invalid` tokens and advance the cursor, preventing a single bad character from trapping the lexer.
 
 ## Compiler integration
 

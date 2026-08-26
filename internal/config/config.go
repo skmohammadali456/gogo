@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -101,6 +102,12 @@ func Load(path string) (Raw, error) {
 	dec := json.NewDecoder(strings.NewReader(string(b)))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&raw); err != nil {
+		return Raw{}, err
+	}
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
+		if err == nil {
+			return Raw{}, fmt.Errorf("configuration must contain exactly one JSON value")
+		}
 		return Raw{}, err
 	}
 	return raw, nil

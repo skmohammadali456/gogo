@@ -115,9 +115,15 @@ func (l *Lexer) skipSpaceAndComments() (token.Token, bool) {
 		start := l.cursor.Offset
 		if l.cursor.Match("//") {
 			for !l.cursor.Done() {
-				r, _ = l.cursor.Peek()
+				r, size := l.cursor.Peek()
 				if r == '\n' || r == '\r' {
 					break
+				}
+				if r == utf8.RuneError && size == 1 {
+					bad := l.cursor.Offset
+					l.advanceRune()
+					l.invalid(bad, "I found invalid UTF-8 in this source file.", "Save the GOGO source as UTF-8 and try again.")
+					continue
 				}
 				l.advanceRune()
 			}
@@ -288,7 +294,12 @@ func digitValue(r rune) int {
 func (l *Lexer) stringLiteral(start int, quote rune) token.Token {
 	l.advanceRune()
 	for !l.cursor.Done() {
-		r, _ := l.cursor.Peek()
+		r, size := l.cursor.Peek()
+		if r == utf8.RuneError && size == 1 {
+			l.advanceRune()
+			l.consumeRestOfInvalidString(quote)
+			return l.invalid(start, "I found invalid UTF-8 in this source file.", "Save the GOGO source as UTF-8 and try again.")
+		}
 		if r == '\\' {
 			l.advanceRune()
 			if l.cursor.Done() {

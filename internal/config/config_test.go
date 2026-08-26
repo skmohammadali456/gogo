@@ -110,3 +110,13 @@ func TestLoadRejectsMalformedConfigurationFile(t *testing.T) {
 		t.Fatal("expected malformed configuration to fail")
 	}
 }
+
+func TestLoadRejectsTrailingJSONValues(t *testing.T) {
+	path := filepath.Join(t.TempDir(), FileName)
+	if err := os.WriteFile(path, []byte(`{"language":"en"} {"language":"bn"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(path); err == nil {
+		t.Fatal("Load accepted multiple JSON values")
+	}
+}

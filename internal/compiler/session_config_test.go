@@ -74,6 +74,39 @@ func TestConfiguredAliasDoesNotMutateBuiltInVocabularyOrOtherSessions(t *testing
 	}
 }
 
+func TestProjectAliasesAreIsolatedAcrossIndependentConfigurations(t *testing.T) {
+	projectA, diags := config.Resolve(config.Raw{Aliases: []config.Alias{{Surface: "x", Keyword: "create"}}}, config.Overrides{})
+	if len(diags) != 0 {
+		t.Fatalf("project A diagnostics: %#v", diags)
+	}
+	projectB, diags := config.Resolve(config.Raw{}, config.Overrides{})
+	if len(diags) != 0 {
+		t.Fatalf("project B diagnostics: %#v", diags)
+	}
+	projectC, diags := config.Resolve(config.Raw{Aliases: []config.Alias{{Surface: "x", Keyword: "variable"}}}, config.Overrides{})
+	if len(diags) != 0 {
+		t.Fatalf("project C diagnostics: %#v", diags)
+	}
+	for _, tc := range []struct {
+		name string
+		v    grammar.Vocabulary
+		want grammar.Keyword
+		ok   bool
+	}{
+		{"project A", projectA.Vocabulary, grammar.KeywordCreate, true},
+		{"project B", projectB.Vocabulary, grammar.KeywordUnknown, false},
+		{"project C", projectC.Vocabulary, grammar.KeywordVariable, true},
+	} {
+		got, ok := tc.v.Lookup("x")
+		if got != tc.want || ok != tc.ok {
+			t.Errorf("%s x = (%s, %v), want (%s, %v)", tc.name, got, ok, tc.want, tc.ok)
+		}
+	}
+	if _, ok := grammar.DefaultVocabulary().Lookup("x"); ok {
+		t.Fatal("project aliases mutated the built-in vocabulary")
+	}
+}
+
 func TestWithGrammarLanguageKeepsResolvedConfigBackwardCompatible(t *testing.T) {
 	s := NewSession(WithGrammarLanguage(grammar.Hindi))
 	if s.GrammarVocabulary().Language != grammar.Hindi || s.Config.Language != grammar.Hindi {

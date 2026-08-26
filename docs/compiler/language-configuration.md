@@ -4,7 +4,7 @@ Step 9 introduces one project-level configuration file, `gogo.json`, for languag
 
 ## Schema
 
-All fields are optional. Omitting the file is valid and preserves existing English behavior.
+All fields are optional. Omitting the file is valid and preserves existing English behavior. A configuration file must contain exactly one JSON object and cannot contain unknown fields.
 
 ```json
 {
