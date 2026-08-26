@@ -8,7 +8,8 @@ func TestStep6EnglishAliases(t *testing.T) {
 		"create": KeywordCreate, "variable": KeywordVariable, "let": KeywordVariable, "var": KeywordVariable,
 		"constant": KeywordConstant, "const": KeywordConstant, "function": KeywordFunction, "fn": KeywordFunction,
 		"component": KeywordComponent,
-		"type":      KeywordType, "readonly": KeywordReadonly, "import": KeywordImport, "from": KeywordFrom, "as": KeywordAs,
+		"type":      KeywordType, "readonly": KeywordReadonly,
+		"enum": KeywordEnum, "interface": KeywordInterface, "extends": KeywordExtends, "import": KeywordImport, "from": KeywordFrom, "as": KeywordAs,
 	} {
 		if got, ok := v.Lookup(surface); !ok || got != want {
 			t.Fatalf("%q = %v,%v want %v,true", surface, got, ok, want)
@@ -30,6 +31,7 @@ func TestStep8EnglishVocabularyEntriesAreExactlyIntended(t *testing.T) {
 		"from":      KeywordFrom,
 		"component": KeywordComponent,
 		"type":      KeywordType, "readonly": KeywordReadonly,
+		"enum": KeywordEnum, "interface": KeywordInterface, "extends": KeywordExtends,
 	}
 	got := Must(English).Entries()
 	if len(got) != len(want) {

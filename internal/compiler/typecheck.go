@@ -9,6 +9,8 @@ import (
 
 func (s *Session) checkTypes(file ast.File) {
 	aliases := make(map[string]ast.TypeRef)
+	interfaces := make(map[string]ast.InterfaceDecl)
+	enumDecls := make(map[string]ast.EnumDecl)
 	for _, stmt := range file.Statements {
 		if a, ok := stmt.(ast.TypeAliasDecl); ok {
 			if _, exists := aliases[a.Name.Name]; exists {
@@ -17,8 +19,92 @@ func (s *Session) checkTypes(file ast.File) {
 			}
 			aliases[a.Name.Name] = a.Type
 		}
+		if in, ok := stmt.(ast.InterfaceDecl); ok {
+			if _, exists := interfaces[in.Name.Name]; exists {
+				s.Diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G3101", Message: "This interface is declared more than once.", Hint: "Use a unique interface name.", Span: in.Name.Span})
+			} else {
+				interfaces[in.Name.Name] = in
+			}
+		}
+		if en, ok := stmt.(ast.EnumDecl); ok {
+			if _, exists := enumDecls[en.Name.Name]; exists {
+				s.Diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G3100", Message: "This enum is declared more than once.", Hint: "Use a unique enum name.", Span: en.Name.Span})
+			} else {
+				enumDecls[en.Name.Name] = en
+			}
+		}
 	}
-	c := checker{s: s, aliases: aliases, env: map[string]binding{}, funcs: map[string]functionSig{}}
+	// Register enum identities before resolving any annotations, allowing
+	// aliases and interface fields to refer to named enums in this session.
+	enums := make(map[string]types.Type, len(enumDecls))
+	for name, decl := range enumDecls {
+		vs := make([]types.EnumVariant, len(decl.Variants))
+		for i, v := range decl.Variants {
+			var p types.Type
+			if v.Payload != nil {
+				p, _ = s.resolveAnnotation(*v.Payload, aliases)
+			}
+			vs[i] = types.EnumVariant{Name: v.Name.Name, Payload: p}
+		}
+		e, err := types.Enum(name, vs...)
+		if err != nil {
+			s.Diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G3100", Message: "This enum declaration is invalid.", Hint: err.Error(), Span: decl.Span})
+			continue
+		}
+		enums[name] = e
+		ec := e
+		aliases[name] = ast.TypeRef{Span: decl.Span, Canonical: &ec}
+	}
+	// Interfaces are aliases to one canonical structural object representation,
+	// resolved deterministically before ordinary annotation resolution.
+	state := map[string]uint8{}
+	var resolveInterface func(string) (ast.TypeRef, bool)
+	resolveInterface = func(name string) (ast.TypeRef, bool) {
+		if state[name] == 1 {
+			s.Diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G3103", Message: "Interface extension is cyclic.", Hint: "Remove the cyclic extends relationship.", Span: interfaces[name].Name.Span})
+			return ast.TypeRef{}, false
+		}
+		if state[name] == 2 {
+			return aliases[name], true
+		}
+		in, ok := interfaces[name]
+		if !ok {
+			return ast.TypeRef{}, false
+		}
+		state[name] = 1
+		fields := map[string]ast.TypeFieldRef{}
+		for _, parent := range in.Extends {
+			p, ok := resolveInterface(parent.Name)
+			if !ok {
+				s.Diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G3102", Message: "This extended interface cannot be resolved.", Hint: "Declare the interface before extending it.", Span: parent.Span})
+				continue
+			}
+			for _, f := range p.Fields {
+				if old, exists := fields[f.Name]; exists && (old.Optional != f.Optional || old.Readonly != f.Readonly || old.Type.Name != f.Type.Name) {
+					s.Diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G3104", Message: "Inherited interface properties conflict.", Hint: "Use compatible inherited property declarations.", Span: parent.Span})
+				}
+				fields[f.Name] = f
+			}
+		}
+		for _, f := range in.Properties {
+			if old, exists := fields[f.Name]; exists && (old.Optional != f.Optional || old.Readonly != f.Readonly || old.Type.Name != f.Type.Name) {
+				s.Diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G3104", Message: "An interface property override is incompatible.", Hint: "Keep inherited property types and modifiers compatible.", Span: f.Span})
+			}
+			fields[f.Name] = f
+		}
+		out := make([]ast.TypeFieldRef, 0, len(fields))
+		for _, f := range fields {
+			out = append(out, f)
+		}
+		ref := ast.TypeRef{Span: in.Span, Name: "object", Fields: out}
+		aliases[name] = ref
+		state[name] = 2
+		return ref, true
+	}
+	for name := range interfaces {
+		resolveInterface(name)
+	}
+	c := checker{s: s, aliases: aliases, enums: enums, env: map[string]binding{}, funcs: map[string]functionSig{}}
 	c.collectFunctions(file.Statements)
 	c.checkStatements(file.Statements, c.env, types.Type{})
 }
@@ -34,6 +120,7 @@ type functionSig struct {
 type checker struct {
 	s       *Session
 	aliases map[string]ast.TypeRef
+	enums   map[string]types.Type
 	env     map[string]binding
 	funcs   map[string]functionSig
 }
@@ -186,6 +273,16 @@ func (c *checker) infer(e ast.Expr, ctx types.Type, hasCtx bool, env map[string]
 	case ast.ObjectExpr:
 		return c.inferObject(x, ctx, hasCtx, env)
 	case ast.MemberExpr:
+		if id, ok := x.Object.(ast.Identifier); ok {
+			if en, exists := c.enums[id.Name]; exists {
+				for _, v := range en.Variants() {
+					if v.VariantName() == x.Name {
+						return v, true
+					}
+				}
+				return types.Type{}, false
+			}
+		}
 		ot, ok := c.infer(x.Object, types.Type{}, false, env)
 		if !ok {
 			return types.Type{}, false
@@ -210,6 +307,26 @@ func (c *checker) infer(e ast.Expr, ctx types.Type, hasCtx bool, env map[string]
 			return u, true
 		}
 	case ast.CallExpr:
+		if m, ok := x.Callee.(ast.MemberExpr); ok {
+			if v, known := c.infer(m, types.Type{}, false, env); known && v.Kind() == types.EnumVariantKind {
+				want, has := v.VariantPayload()
+				if !has {
+					if len(x.Arguments) > 0 {
+						c.s.typeError("G3100", x, "This enum variant does not accept a payload.", "Remove the payload.")
+					}
+					return v, true
+				}
+				if len(x.Arguments) != 1 {
+					c.s.typeError("G3100", x, "This enum variant requires exactly one payload.", "Pass one value with the variant payload type.")
+					return v, true
+				}
+				got, ok := c.infer(x.Arguments[0], want, true, env)
+				if ok && !compatibleInit(got, want) {
+					c.s.typeError("G3002", x.Arguments[0], "This enum payload is not assignable to the variant payload type.", "Pass a compatible payload.")
+				}
+				return v, true
+			}
+		}
 		if id, ok := x.Callee.(ast.Identifier); ok {
 			if sig, exists := c.funcs[id.Name]; exists {
 				for i, a := range x.Arguments {
@@ -343,6 +460,62 @@ func (c *checker) applyBinaryNarrow(x ast.BinaryExpr, thenEnv, elseEnv map[strin
 	if id, lit, ok := identLiteralCheck(x.Left, x.Right); ok {
 		narrowUnionLiteral(targetEnv, id, literalType(lit))
 		_ = otherEnv
+	}
+	if id, variant, ok := c.enumVariantCheck(x.Left, x.Right); ok {
+		c.narrowEnum(targetEnv, id, variant, true)
+		c.narrowEnum(otherEnv, id, variant, false)
+	}
+}
+
+// enumVariantCheck recognizes only a declared Enum.Variant expression; this
+// is deliberately stricter than arbitrary member equality so narrowing is a
+// proof rather than an assumption.
+func (c *checker) enumVariantCheck(a, b ast.Expr) (string, types.Type, bool) {
+	for _, pair := range [][2]ast.Expr{{a, b}, {b, a}} {
+		id, ok := pair[0].(ast.Identifier)
+		if !ok {
+			continue
+		}
+		m, ok := pair[1].(ast.MemberExpr)
+		if !ok {
+			continue
+		}
+		v, known := c.infer(m, types.Type{}, false, nil)
+		if known && v.Kind() == types.EnumVariantKind {
+			return id.Name, v, true
+		}
+	}
+	return "", types.Type{}, false
+}
+func (c *checker) narrowEnum(env map[string]binding, name string, variant types.Type, equal bool) {
+	b, ok := env[name]
+	if !ok {
+		return
+	}
+	if b.current.Kind() == types.EnumKind {
+		if b.current.EnumName() != variant.EnumName() {
+			return
+		}
+		if equal {
+			b.current = variant
+			env[name] = b
+		}
+		return
+	}
+	if b.current.Kind() != types.UnionKind {
+		return
+	}
+	var keep []types.Type
+	for _, m := range b.current.Members() {
+		match := m.Kind() == types.EnumVariantKind && m.Equal(variant)
+		if match == equal {
+			keep = append(keep, m)
+		}
+	}
+	if len(keep) > 0 {
+		u, _ := types.Union(keep...)
+		b.current = u
+		env[name] = b
 	}
 }
 func (c *checker) checkAssignment(expr ast.Expr, env map[string]binding) {

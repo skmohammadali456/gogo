@@ -28,10 +28,12 @@ const (
 	UnionKind
 	IntersectionKind
 	ResultKind
+	EnumKind
+	EnumVariantKind
 )
 
 func (k Kind) String() string {
-	names := []string{"invalid", "string", "number", "boolean", "bigint", "bytes", "array", "map", "set", "tuple", "record", "literal", "optional", "union", "intersection", "result"}
+	names := []string{"invalid", "string", "number", "boolean", "bigint", "bytes", "array", "map", "set", "tuple", "record", "literal", "optional", "union", "intersection", "result", "enum", "enum variant"}
 	if int(k) >= len(names) {
 		return "invalid"
 	}
@@ -41,14 +43,66 @@ func (k Kind) String() string {
 // Type is an immutable value type. Its unexported fields prevent callers from
 // changing collection members after construction. The zero Type is Invalid.
 type Type struct {
-	kind                Kind
-	base                Kind // the primitive kind represented by a literal
-	text                string
-	element, key, value *Type
-	members             []Type
-	fields              []Field // always sorted by Name; record ordering is not semantic
-	index               *IndexSignature
-	mutable             bool
+	kind                  Kind
+	base                  Kind // the primitive kind represented by a literal
+	text                  string
+	element, key, value   *Type
+	members               []Type
+	fields                []Field // always sorted by Name; record ordering is not semantic
+	index                 *IndexSignature
+	mutable               bool
+	enumName, variantName string
+}
+
+// EnumVariant describes one deterministic enum case. Payload is optional.
+type EnumVariant struct {
+	Name    string
+	Payload Type
+}
+
+func Enum(name string, variants ...EnumVariant) (Type, error) {
+	if name == "" || len(variants) == 0 {
+		return Type{}, fmt.Errorf("enum requires a name and at least one variant")
+	}
+	v := append([]EnumVariant(nil), variants...)
+	sort.Slice(v, func(i, j int) bool { return v[i].Name < v[j].Name })
+	for i, x := range v {
+		if x.Name == "" {
+			return Type{}, fmt.Errorf("enum variant name cannot be empty")
+		}
+		if i > 0 && v[i-1].Name == x.Name {
+			return Type{}, fmt.Errorf("duplicate enum variant %q", x.Name)
+		}
+	}
+	return Type{kind: EnumKind, enumName: name, members: enumMembers(name, v)}, nil
+}
+func enumMembers(name string, variants []EnumVariant) []Type {
+	out := make([]Type, len(variants))
+	for i, v := range variants {
+		out[i] = Type{kind: EnumVariantKind, enumName: name, variantName: v.Name, value: copyType(v.Payload)}
+	}
+	return out
+}
+func MustEnum(name string, variants ...EnumVariant) Type {
+	t, e := Enum(name, variants...)
+	if e != nil {
+		panic(e)
+	}
+	return t
+}
+func (t Type) EnumName() string    { return t.enumName }
+func (t Type) VariantName() string { return t.variantName }
+func (t Type) VariantPayload() (Type, bool) {
+	if t.kind != EnumVariantKind || t.value == nil || t.value.Kind() == Invalid {
+		return Type{}, false
+	}
+	return *t.value, true
+}
+func (t Type) Variants() []Type {
+	if t.kind != EnumKind {
+		return nil
+	}
+	return t.Members()
 }
 
 type Field struct {
@@ -362,7 +416,7 @@ func (t Type) isPrimitive() bool { return t.kind >= StringKind && t.kind <= Byte
 // Equal is deterministic structural equality. Literal types compare their
 // primitive base and exact canonical literal text; records are name-sorted.
 func (t Type) Equal(u Type) bool {
-	if t.kind != u.kind || t.mutable != u.mutable || t.base != u.base || t.text != u.text {
+	if t.kind != u.kind || t.mutable != u.mutable || t.base != u.base || t.text != u.text || t.enumName != u.enumName || t.variantName != u.variantName {
 		return false
 	}
 	if !samePtr(t.element, u.element) || !samePtr(t.key, u.key) || !samePtr(t.value, u.value) || len(t.members) != len(u.members) || len(t.fields) != len(u.fields) {
@@ -439,6 +493,9 @@ func (t Type) AssignableTo(target Type) bool {
 	}
 	if t.kind == LiteralKind && target.isPrimitive() {
 		return t.base == target.kind
+	}
+	if t.kind == EnumVariantKind && target.kind == EnumKind {
+		return t.enumName == target.enumName
 	}
 	if t.kind == RecordKind && target.kind == RecordKind {
 		return assignObject(t, target)
@@ -526,6 +583,13 @@ func (t Type) String() string {
 			body = "record{[string]: " + t.index.Value.String() + ", " + strings.Join(parts, ", ") + "}"
 		}
 		return body
+	case EnumKind:
+		return "enum " + t.enumName
+	case EnumVariantKind:
+		if p, ok := t.VariantPayload(); ok {
+			return t.enumName + "." + t.variantName + "<" + p.String() + ">"
+		}
+		return t.enumName + "." + t.variantName
 	default:
 		return t.kind.String()
 	}
