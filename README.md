@@ -50,7 +50,7 @@ Status: **COMPLETE**. Project-level `gogo.json` language configuration now resol
 
 **10. Primitive and collection types**
 
-Implement string, number, boolean, bigint, bytes, arrays, maps, sets, tuples, records, and other core types. Define mutability, literal types, assignability, equality, and runtime representation.
+Status: **COMPLETE**. A canonical language-independent type model now provides string, number, boolean, bigint, bytes, arrays, maps, sets, tuples, records, literal types, structural equality, explicit assignability and mutability, a runtime-value boundary, annotation resolution, diagnostics, and multilingual integration. See `docs/compiler/type-system.md`.
 
 **11. Object types and type aliases**
 

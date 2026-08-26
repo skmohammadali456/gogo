@@ -106,6 +106,9 @@ type VariableDecl struct {
 	Name  Identifier
 	Type  *TypeRef
 	Value Expr
+	// Mutable distinguishes `variable` from the existing `constant` surface
+	// declaration without introducing a second declaration AST.
+	Mutable bool
 }
 
 func (VariableDecl) node() {}

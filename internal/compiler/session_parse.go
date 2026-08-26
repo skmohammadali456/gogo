@@ -26,5 +26,6 @@ func (s *Session) ParseFile(id uint32) (ast.File, bool) {
 		d.FileID = id
 		s.Diagnostics.Add(d)
 	}
+	s.checkTypes(result)
 	return result, true
 }
