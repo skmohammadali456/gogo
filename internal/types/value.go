@@ -21,6 +21,16 @@ func cloneData(data any) any {
 		return append([]Value(nil), value...)
 	case []MapEntry:
 		return append([]MapEntry(nil), value...)
+	case OptionalData:
+		if value.Value == nil {
+			return value
+		}
+		v := *value.Value
+		return OptionalData{Present: value.Present, Value: &v}
+	case UnionData:
+		return UnionData{Member: value.Member, Value: value.Value}
+	case ResultData:
+		return ResultData{OK: value.OK, Value: value.Value}
 	case map[string]Value:
 		out := make(map[string]Value, len(value))
 		for k, v := range value {
@@ -117,4 +127,82 @@ func RecordValue(t Type, fields map[string]Value) (Value, error) {
 		}
 	}
 	return Value{typ: t, data: copyFields}, nil
+}
+
+type OptionalData struct {
+	Present bool
+	Value   *Value
+}
+
+func OptionalAbsent(t Type) (Value, error) {
+	if t.Kind() != OptionalKind {
+		return Value{}, fmt.Errorf("absent optional value requires an optional type")
+	}
+	return Value{typ: t, data: OptionalData{}}, nil
+}
+
+func OptionalPresent(t Type, value Value) (Value, error) {
+	element, ok := t.Element()
+	if !ok || t.Kind() != OptionalKind {
+		return Value{}, fmt.Errorf("present optional value requires an optional type")
+	}
+	if !value.typ.AssignableTo(element) {
+		return Value{}, fmt.Errorf("optional payload is not assignable to %s", element)
+	}
+	v := value
+	return Value{typ: t, data: OptionalData{Present: true, Value: &v}}, nil
+}
+
+type UnionData struct {
+	Member Type
+	Value  Value
+}
+
+func UnionValue(t Type, value Value) (Value, error) {
+	if t.Kind() != UnionKind {
+		return Value{}, fmt.Errorf("union value requires a union type")
+	}
+	for _, m := range t.Members() {
+		if value.typ.AssignableTo(m) {
+			return Value{typ: t, data: UnionData{Member: m, Value: value}}, nil
+		}
+	}
+	return Value{}, fmt.Errorf("union payload is not assignable to any member")
+}
+
+func IntersectionValue(t Type, value Value) (Value, error) {
+	if t.Kind() != IntersectionKind && t.Kind() != RecordKind {
+		return Value{}, fmt.Errorf("intersection value requires an intersection type")
+	}
+	if !value.typ.AssignableTo(t) {
+		return Value{}, fmt.Errorf("intersection payload does not satisfy all members")
+	}
+	return Value{typ: t, data: value}, nil
+}
+
+type ResultData struct {
+	OK    bool
+	Value Value
+}
+
+func OkValue(t Type, value Value) (Value, error) {
+	okType, ok := t.Ok()
+	if t.Kind() != ResultKind || !ok {
+		return Value{}, fmt.Errorf("ok value requires a result type")
+	}
+	if !value.typ.AssignableTo(okType) {
+		return Value{}, fmt.Errorf("ok payload is not assignable to %s", okType)
+	}
+	return Value{typ: t, data: ResultData{OK: true, Value: value}}, nil
+}
+
+func ErrValue(t Type, value Value) (Value, error) {
+	errType, ok := t.Err()
+	if t.Kind() != ResultKind || !ok {
+		return Value{}, fmt.Errorf("err value requires a result type")
+	}
+	if !value.typ.AssignableTo(errType) {
+		return Value{}, fmt.Errorf("err payload is not assignable to %s", errType)
+	}
+	return Value{typ: t, data: ResultData{OK: false, Value: value}}, nil
 }

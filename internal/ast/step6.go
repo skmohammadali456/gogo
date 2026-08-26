@@ -6,6 +6,10 @@ type TypeRef struct {
 	Span  source.Span
 	Name  string
 	Array bool
+	// Union and Intersection retain infix type expressions while keeping one
+	// semantic AST node and one compiler ResolveType path.
+	Union        []TypeRef
+	Intersection []TypeRef
 	// Arguments and Fields retain surface annotation structure until the
 	// compiler resolves it through the canonical types package.
 	Arguments []TypeRef

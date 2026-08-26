@@ -24,10 +24,14 @@ const (
 	TupleKind
 	RecordKind
 	LiteralKind
+	OptionalKind
+	UnionKind
+	IntersectionKind
+	ResultKind
 )
 
 func (k Kind) String() string {
-	names := []string{"invalid", "string", "number", "boolean", "bigint", "bytes", "array", "map", "set", "tuple", "record", "literal"}
+	names := []string{"invalid", "string", "number", "boolean", "bigint", "bytes", "array", "map", "set", "tuple", "record", "literal", "optional", "union", "intersection", "result"}
 	if int(k) >= len(names) {
 		return "invalid"
 	}
@@ -99,6 +103,8 @@ func (t Type) IndexSignature() (IndexSignature, bool) {
 	return *t.index, true
 }
 func (t Type) LiteralBase() (Kind, bool) { return t.base, t.kind == LiteralKind }
+func (t Type) Ok() (Type, bool)          { return t.Key() }
+func (t Type) Err() (Type, bool)         { return t.Value() }
 
 // Array, Map, and Set are mutable collection values by default. Tuple and
 // Record are immutable value aggregates.
@@ -109,6 +115,33 @@ func Map(key, value Type) Type {
 	return Type{kind: MapKind, key: copyType(key), value: copyType(value), mutable: true}
 }
 func Set(element Type) Type { return Type{kind: SetKind, element: copyType(element), mutable: true} }
+func Optional(element Type) Type {
+	element = Normalize(element)
+	return Type{kind: OptionalKind, element: copyType(element), mutable: element.mutable}
+}
+func Union(members ...Type) (Type, error) { return normalizedComposite(UnionKind, members...) }
+func MustUnion(members ...Type) Type {
+	t, err := Union(members...)
+	if err != nil {
+		panic(err)
+	}
+	return t
+}
+func Intersection(members ...Type) (Type, error) {
+	return normalizedComposite(IntersectionKind, members...)
+}
+func MustIntersection(members ...Type) Type {
+	t, err := Intersection(members...)
+	if err != nil {
+		panic(err)
+	}
+	return t
+}
+func Result(ok, err Type) Type {
+	ok = Normalize(ok)
+	err = Normalize(err)
+	return Type{kind: ResultKind, key: copyType(ok), value: copyType(err), mutable: ok.mutable || err.mutable}
+}
 func Tuple(members ...Type) Type {
 	return Type{kind: TupleKind, members: append([]Type(nil), members...)}
 }
@@ -146,6 +179,13 @@ func RecordWithIndex(index IndexSignature, fields ...Field) (Type, error) {
 	t.index = &IndexSignature{Key: index.Key, Value: index.Value, Readonly: index.Readonly}
 	return t, nil
 }
+func MustRecordWithIndex(index IndexSignature, fields ...Field) Type {
+	t, err := RecordWithIndex(index, fields...)
+	if err != nil {
+		panic(err)
+	}
+	return t
+}
 func MustRecord(fields ...Field) Type {
 	t, err := Record(fields...)
 	if err != nil {
@@ -159,7 +199,164 @@ func Literal(base Type, text string) Type {
 	}
 	return Type{kind: LiteralKind, base: base.kind, text: text}
 }
-func copyType(t Type) *Type      { c := t; return &c }
+func copyType(t Type) *Type { c := t; return &c }
+
+func Normalize(t Type) Type {
+	switch t.kind {
+	case ArrayKind:
+		e := Normalize(*t.element)
+		t.element = copyType(e)
+	case MapKind:
+		k, v := Normalize(*t.key), Normalize(*t.value)
+		t.key, t.value = copyType(k), copyType(v)
+	case SetKind, OptionalKind:
+		e := Normalize(*t.element)
+		t.element = copyType(e)
+		if t.kind == OptionalKind {
+			t.mutable = e.mutable
+		}
+	case TupleKind:
+		for i := range t.members {
+			t.members[i] = Normalize(t.members[i])
+		}
+	case RecordKind:
+		for i := range t.fields {
+			t.fields[i].Type = Normalize(t.fields[i].Type)
+		}
+	case ResultKind:
+		ok, er := Normalize(*t.key), Normalize(*t.value)
+		t.key, t.value = copyType(ok), copyType(er)
+		t.mutable = ok.mutable || er.mutable
+	case UnionKind, IntersectionKind:
+		n, _ := normalizedComposite(t.kind, t.members...)
+		return n
+	}
+	return t
+}
+
+func normalizedComposite(kind Kind, members ...Type) (Type, error) {
+	var flat []Type
+	for _, m := range members {
+		m = Normalize(m)
+		if m.kind == Invalid {
+			return Type{}, fmt.Errorf("%s member cannot be invalid", kind)
+		}
+		if m.kind == kind {
+			flat = append(flat, m.members...)
+		} else {
+			flat = append(flat, m)
+		}
+	}
+	if len(flat) == 0 {
+		return Type{}, fmt.Errorf("%s requires at least one member", kind)
+	}
+	sort.SliceStable(flat, func(i, j int) bool { return flat[i].String() < flat[j].String() })
+	uniq := flat[:0]
+	for _, m := range flat {
+		if len(uniq) == 0 || !m.Equal(uniq[len(uniq)-1]) {
+			uniq = append(uniq, m)
+		}
+	}
+	uniq = simplifyCompositeMembers(kind, uniq)
+	if len(uniq) == 1 {
+		return uniq[0], nil
+	}
+	if kind == IntersectionKind {
+		if o, ok := combineObjectIntersection(uniq); ok {
+			return o, nil
+		}
+	}
+	mut := false
+	for _, m := range uniq {
+		mut = mut || m.mutable
+	}
+	return Type{kind: kind, members: append([]Type(nil), uniq...), mutable: mut}, nil
+}
+
+func simplifyCompositeMembers(kind Kind, members []Type) []Type {
+	keep := make([]bool, len(members))
+	for i := range keep {
+		keep[i] = true
+	}
+	for i, m := range members {
+		for j, other := range members {
+			if i == j || !keep[i] {
+				continue
+			}
+			switch kind {
+			case UnionKind:
+				if m.AssignableTo(other) && !other.AssignableTo(m) {
+					keep[i] = false
+				}
+			case IntersectionKind:
+				if other.AssignableTo(m) && !m.AssignableTo(other) {
+					keep[i] = false
+				}
+			}
+		}
+	}
+	out := members[:0]
+	for i, m := range members {
+		if keep[i] {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+func combineObjectIntersection(ms []Type) (Type, bool) {
+	fields := map[string]Field{}
+	var index *IndexSignature
+	allObj := true
+	for _, m := range ms {
+		if m.kind != RecordKind {
+			allObj = false
+			break
+		}
+		if m.index != nil {
+			if index == nil {
+				c := *m.index
+				index = &c
+			} else {
+				if !index.Key.Equal(m.index.Key) || !index.Value.Equal(m.index.Value) {
+					return Type{kind: IntersectionKind, members: ms}, false
+				}
+				index.Readonly = index.Readonly || m.index.Readonly
+			}
+		}
+		for _, f := range m.fields {
+			if old, ok := fields[f.Name]; ok {
+				if !old.Type.Equal(f.Type) {
+					return Type{kind: IntersectionKind, members: ms}, false
+				}
+				f.Optional = old.Optional && f.Optional
+				f.Readonly = old.Readonly || f.Readonly
+			}
+			fields[f.Name] = f
+		}
+	}
+	if !allObj {
+		return Type{}, false
+	}
+	out := make([]Field, 0, len(fields))
+	for _, f := range fields {
+		out = append(out, f)
+	}
+	var (
+		t   Type
+		err error
+	)
+	if index != nil {
+		t, err = RecordWithIndex(*index, out...)
+	} else {
+		t, err = Object(out...)
+	}
+	if err != nil {
+		return Type{kind: IntersectionKind, members: ms}, false
+	}
+	return t, true
+}
+
 func (t Type) isPrimitive() bool { return t.kind >= StringKind && t.kind <= BytesKind }
 
 // Equal is deterministic structural equality. Literal types compare their
@@ -198,8 +395,47 @@ func samePtr(a, b *Type) bool {
 // invariant, tuples require equal arity, and records require exactly the same
 // named fields in this Step 10 closed-record model.
 func (t Type) AssignableTo(target Type) bool {
+	t, target = Normalize(t), Normalize(target)
 	if t.Equal(target) {
 		return true
+	}
+	if target.kind == OptionalKind || t.kind == OptionalKind {
+		return target.kind == OptionalKind && t.kind == OptionalKind && t.element.AssignableTo(*target.element)
+	}
+	if target.kind == UnionKind {
+		for _, m := range target.members {
+			if t.AssignableTo(m) {
+				return true
+			}
+		}
+		return false
+	}
+	if t.kind == UnionKind {
+		for _, m := range t.members {
+			if !m.AssignableTo(target) {
+				return false
+			}
+		}
+		return true
+	}
+	if target.kind == IntersectionKind {
+		for _, m := range target.members {
+			if !t.AssignableTo(m) {
+				return false
+			}
+		}
+		return true
+	}
+	if t.kind == IntersectionKind {
+		for _, m := range t.members {
+			if m.AssignableTo(target) {
+				return true
+			}
+		}
+		return false
+	}
+	if t.kind == ResultKind && target.kind == ResultKind {
+		return t.key.AssignableTo(*target.key) && t.value.AssignableTo(*target.value)
 	}
 	if t.kind == LiteralKind && target.isPrimitive() {
 		return t.base == target.kind
@@ -256,6 +492,14 @@ func (t Type) String() string {
 	switch t.kind {
 	case LiteralKind:
 		return fmt.Sprintf("%s(%q)", t.base, t.text)
+	case OptionalKind:
+		return "optional<" + t.element.String() + ">"
+	case UnionKind:
+		return strings.Join(typeStrings(t.members), " | ")
+	case IntersectionKind:
+		return strings.Join(typeStrings(t.members), " & ")
+	case ResultKind:
+		return "result<" + t.key.String() + ", " + t.value.String() + ">"
 	case ArrayKind:
 		return "array<" + t.element.String() + ">"
 	case SetKind:
@@ -286,10 +530,11 @@ func (t Type) String() string {
 		return t.kind.String()
 	}
 }
-func join(ts []Type) string {
+func join(ts []Type) string { return strings.Join(typeStrings(ts), ", ") }
+func typeStrings(ts []Type) []string {
 	p := make([]string, len(ts))
 	for i := range ts {
 		p[i] = ts[i].String()
 	}
-	return strings.Join(p, ", ")
+	return p
 }

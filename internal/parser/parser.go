@@ -740,8 +740,62 @@ func (p *Parser) looksLikeTypeThenAs() bool {
 	return false
 }
 
-func (p *Parser) parseType() ast.TypeRef {
-	name := p.expect(token.Identifier, "G2044", "I expected a type name.", "Use a type name such as Text, Number, Boolean, Object, or a user-defined type.")
+func (p *Parser) parseType() ast.TypeRef { return p.parseUnionType() }
+
+func (p *Parser) parseUnionType() ast.TypeRef {
+	left := p.parseIntersectionType()
+	for p.at(token.Or) {
+		p.advance()
+		right := p.parseIntersectionType()
+		members := append([]ast.TypeRef{}, left.Union...)
+		if len(members) == 0 {
+			members = append(members, left)
+		}
+		if len(right.Union) > 0 {
+			members = append(members, right.Union...)
+		} else {
+			members = append(members, right)
+		}
+		left = ast.TypeRef{Span: source.Span{Start: left.Span.Start, End: right.Span.End}, Union: members}
+	}
+	return left
+}
+
+func (p *Parser) parseIntersectionType() ast.TypeRef {
+	left := p.parsePrimaryType()
+	for p.at(token.And) {
+		p.advance()
+		right := p.parsePrimaryType()
+		members := append([]ast.TypeRef{}, left.Intersection...)
+		if len(members) == 0 {
+			members = append(members, left)
+		}
+		if len(right.Intersection) > 0 {
+			members = append(members, right.Intersection...)
+		} else {
+			members = append(members, right)
+		}
+		left = ast.TypeRef{Span: source.Span{Start: left.Span.Start, End: right.Span.End}, Intersection: members}
+	}
+	return left
+}
+
+func (p *Parser) parsePrimaryType() ast.TypeRef {
+	if p.at(token.LParen) {
+		start := p.advance().Span.Start
+		t := p.parseType()
+		close := p.expect(token.RParen, "G2044", "I expected ')' to close this type expression.", "Close the grouped type with ).")
+		t.Span.Start = start
+		if close.Kind != token.Invalid {
+			t.Span.End = close.Span.End
+		}
+		return t
+	}
+	if p.at(token.String) || p.at(token.Number) {
+		lit := p.advance()
+		return ast.TypeRef{Span: lit.Span, Name: lit.Text}
+	}
+	name := p.expect(token.Identifier, "G2044", "I expected a type name.", "Use a type name such as String, Number, Boolean, Object, Optional, Result, or a user-defined type.")
 	if name.Kind == token.Invalid {
 		return ast.TypeRef{Span: name.Span}
 	}

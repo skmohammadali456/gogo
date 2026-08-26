@@ -58,7 +58,7 @@ Status: **COMPLETE**. Structural object properties, optionality, readonly compat
 
 **12. Optional, union, intersection, and result types**
 
-Provide safe alternatives to null-heavy APIs. Optional values must be explicit. Union and intersection types must support practical frontend modeling. Result-style types must make recoverable failures visible without requiring exception-driven control flow.
+Status: **COMPLETE**. The canonical language-independent type model now supports explicit `Optional<T>`, deterministic unions (`A | B`), structural intersections (`A & B`), and `Result<Ok, Err>` recoverable failure types. Normalization, equality, assignability, mutability, runtime `types.Value` constructors, aliases, object interaction, diagnostics, and English/Bengali/Hindi parsing are implemented without Step 13+ features. See `docs/compiler/optional-union-intersection-result.md`.
 
 **13. Type inference and narrowing**
 
