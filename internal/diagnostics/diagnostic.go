@@ -311,6 +311,11 @@ func snippet(text string, d Diagnostic) string {
 		return ""
 	}
 	lines := strings.SplitAfter(text, "\n")
+	// SplitAfter omits the empty final line after a trailing newline, even
+	// though PositionAt correctly identifies EOF as the first column of it.
+	if strings.HasSuffix(text, "\n") {
+		lines = append(lines, "")
+	}
 	start, end := d.Span.Start.Line, d.Span.End.Line
 	if end < start {
 		end = start
