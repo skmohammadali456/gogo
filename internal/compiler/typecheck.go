@@ -114,9 +114,6 @@ func (c *checker) checkStatement(stmt ast.Stmt, env map[string]binding, ret type
 		}
 		thenEnv := copyEnv(env)
 		elseEnv := copyEnv(env)
-		if n.Else == nil && c.discriminantCondition(n.Condition, env) {
-			c.diag("G3009", ast.SpanOf(n.Condition), "This union handling is not exhaustive.", "Add an else branch or handle every supported union member.")
-		}
 		c.applyNarrow(n.Condition, thenEnv, elseEnv)
 		thenRet := c.checkStatements(n.Then.Statements, thenEnv, ret)
 		elseRet := false
@@ -127,12 +124,24 @@ func (c *checker) checkStatement(stmt ast.Stmt, env map[string]binding, ret type
 		return thenRet && n.Else != nil && elseRet
 	case ast.ReturnStmt:
 		actual, known := c.infer(n.Value, ret, ret.Kind() != types.Invalid, env)
-		if ret.Kind() != types.Invalid && known && !compatibleInit(actual, ret) && !isBareIdentifier(n.Value) {
+		if ret.Kind() != types.Invalid && known && !compatibleInit(actual, ret) && !c.legacyUnnarrowedIdentifier(n.Value, env) {
 			c.s.typeError("G3002", n.Value, "This return value is not assignable to the declared return type.", "Return a value with the declared canonical type.")
 		}
 		return true
 	}
 	return false
+}
+
+// Step 10 accepted un-narrowed identifier returns as a signature boundary.
+// Keep that compatibility while still checking identifiers whose type has been
+// refined by a local Step 13 proof.
+func (c *checker) legacyUnnarrowedIdentifier(e ast.Expr, env map[string]binding) bool {
+	id, ok := e.(ast.Identifier)
+	if !ok {
+		return false
+	}
+	b, ok := env[id.Name]
+	return ok && b.current.Equal(b.declared)
 }
 func (c *checker) infer(e ast.Expr, ctx types.Type, hasCtx bool, env map[string]binding) (types.Type, bool) {
 	switch x := e.(type) {
@@ -181,7 +190,10 @@ func (c *checker) infer(e ast.Expr, ctx types.Type, hasCtx bool, env map[string]
 		if !ok {
 			return types.Type{}, false
 		}
-		if f, ok := fieldOf(ot, x.Name); ok {
+		// A member is readable without a preceding proof only when every
+		// possible union member has that field.  fieldOf intentionally has
+		// broader use for contextual object literals and narrowing predicates.
+		if f, ok := fieldOfAll(ot, x.Name); ok {
 			if x.Optional {
 				return types.Optional(f.Type), true
 			}
@@ -251,11 +263,12 @@ func (c *checker) inferBinary(x ast.BinaryExpr, env map[string]binding) (types.T
 	return types.Type{}, false
 }
 func (c *checker) truthy(e ast.Expr, env map[string]binding) bool {
+	if m, ok := e.(ast.MemberExpr); ok && propertyCondition(m, env) {
+		return true
+	}
 	if t, ok := c.infer(e, types.Type{}, false, env); ok {
 		switch t.Kind() {
 		case types.BooleanKind, types.OptionalKind, types.ResultKind:
-			return true
-		case types.UnionKind:
 			return true
 		}
 	}
@@ -353,6 +366,10 @@ func (c *checker) checkAssignment(expr ast.Expr, env map[string]binding) {
 	if ok && !compatibleInit(at, b.declared) {
 		c.s.typeError("G3002", a.Right, "This value is not assignable to the declared type.", "Use a value with the declared canonical type.")
 	}
+	// Assignment can replace a value narrowed by an earlier proof.  The
+	// assignment's declared target is the only type known after this point.
+	b.current = b.declared
+	env[id.Name] = b
 }
 func (c *checker) diag(code string, sp source.Span, msg, hint string) {
 	c.s.Diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: code, Message: msg, Hint: hint, Span: sp})
@@ -412,6 +429,52 @@ func fieldOf(t types.Type, name string) (types.Field, bool) {
 		}
 	}
 	return types.Field{}, false
+}
+
+// fieldOfAll returns a field only when it is safe to read on every possible
+// union member.  This deliberately differs from fieldOf, which is also used
+// to discover contextual fields and to select variants during a proof.
+func fieldOfAll(t types.Type, name string) (types.Field, bool) {
+	t = types.Normalize(t)
+	if t.Kind() != types.UnionKind {
+		return fieldOf(t, name)
+	}
+	var found []types.Type
+	optional, readonly := false, false
+	for _, member := range t.Members() {
+		field, ok := fieldOf(member, name)
+		if !ok {
+			return types.Field{}, false
+		}
+		found = append(found, field.Type)
+		optional = optional || field.Optional
+		readonly = readonly || field.Readonly
+	}
+	joined, err := types.Union(found...)
+	if err != nil {
+		return types.Field{}, false
+	}
+	return types.Field{Name: name, Type: joined, Optional: optional, Readonly: readonly}, true
+}
+
+func propertyCondition(m ast.MemberExpr, env map[string]binding) bool {
+	name, ok := rootIdent(m)
+	if !ok {
+		return false
+	}
+	binding, ok := env[name]
+	if !ok || binding.current.Kind() != types.UnionKind {
+		return false
+	}
+	has, missing := false, false
+	for _, member := range binding.current.Members() {
+		if _, ok := fieldOf(member, m.Name); ok {
+			has = true
+		} else {
+			missing = true
+		}
+	}
+	return has && missing
 }
 func rootIdent(m ast.MemberExpr) (string, bool) {
 	switch o := m.Object.(type) {
@@ -601,6 +664,10 @@ func narrowDiscriminantNot(env map[string]binding, name, prop string, lit types.
 			if !(lit.AssignableTo(f.Type) || f.Type.AssignableTo(lit)) {
 				keep = append(keep, m)
 			}
+		} else {
+			// A missing property cannot equal the checked literal, so it belongs
+			// to the false branch rather than being incorrectly discarded.
+			keep = append(keep, m)
 		}
 	}
 	if len(keep) > 0 {
@@ -609,5 +676,3 @@ func narrowDiscriminantNot(env map[string]binding, name, prop string, lit types.
 		env[name] = b
 	}
 }
-
-func isBareIdentifier(e ast.Expr) bool { _, ok := e.(ast.Identifier); return ok }
