@@ -721,17 +721,22 @@ func (p *Parser) looksLikeTypeThenAs() bool {
 	depth := 0
 	for i := p.pos + 1; i < len(p.tokens); i++ {
 		t := p.tokens[i]
+		if depth == 0 && t.Span.Start.Line > p.current().Span.Start.Line {
+			return false
+		}
 		switch t.Kind {
-		case token.Less, token.LBrace:
+		case token.Less, token.LBrace, token.LParen:
 			depth++
-		case token.Greater, token.RBrace:
+		case token.Greater, token.RBrace, token.RParen:
 			if depth > 0 {
 				depth--
 			}
 		}
 		if depth == 0 && t.Kind == token.Identifier {
 			kw, ok := p.vocabulary.Lookup(t.Text)
-			return ok && kw == grammar.KeywordAs
+			if ok && kw == grammar.KeywordAs {
+				return true
+			}
 		}
 		if depth == 0 && (t.Kind == token.Semicolon || t.Kind == token.EOF) {
 			return false

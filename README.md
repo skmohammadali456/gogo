@@ -62,7 +62,7 @@ Status: **COMPLETE**. The canonical language-independent type model now supports
 
 **13. Type inference and narrowing**
 
-Build contextual inference, variable inference, control-flow narrowing, discriminated unions, truthiness checks, property checks, exhaustiveness analysis, and safe narrowing across functions and UI state.
+Status: **COMPLETE**. Contextual and variable inference, safe control-flow narrowing, discriminated unions, truthiness checks, property checks, documented exhaustiveness behavior, and safe function/UI-state boundaries are implemented in the existing compiler/type-analysis layer. See `docs/compiler/type-inference-narrowing.md`.
 
 **14. Enums and interfaces**
 
