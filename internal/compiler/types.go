@@ -10,9 +10,9 @@ import (
 
 // ResolveType resolves a standalone annotation. Session resolution additionally
 // supplies locally declared aliases, but both paths construct the same types.Type.
-func ResolveType(ref ast.TypeRef) (types.Type, error) { return resolveType(ref, nil, nil) }
+func ResolveType(ref ast.TypeRef) (types.Type, error) { return resolveType(ref, nil, nil, nil, nil) }
 
-func resolveType(ref ast.TypeRef, aliases map[string]ast.TypeRef, resolving map[string]bool) (types.Type, error) {
+func resolveType(ref ast.TypeRef, aliases map[string]ast.TypeRef, resolving map[string]bool, gen genericEnv, generics map[string]genericDecl) (types.Type, error) {
 	if ref.Canonical != nil {
 		return *ref.Canonical, nil
 	}
@@ -20,7 +20,7 @@ func resolveType(ref ast.TypeRef, aliases map[string]ast.TypeRef, resolving map[
 		members := make([]types.Type, len(ref.Union))
 		for i := range ref.Union {
 			var err error
-			members[i], err = resolveType(ref.Union[i], aliases, resolving)
+			members[i], err = resolveType(ref.Union[i], aliases, resolving, gen, generics)
 			if err != nil {
 				return types.Type{}, err
 			}
@@ -31,7 +31,7 @@ func resolveType(ref ast.TypeRef, aliases map[string]ast.TypeRef, resolving map[
 		members := make([]types.Type, len(ref.Intersection))
 		for i := range ref.Intersection {
 			var err error
-			members[i], err = resolveType(ref.Intersection[i], aliases, resolving)
+			members[i], err = resolveType(ref.Intersection[i], aliases, resolving, gen, generics)
 			if err != nil {
 				return types.Type{}, err
 			}
@@ -55,7 +55,7 @@ func resolveType(ref ast.TypeRef, aliases map[string]ast.TypeRef, resolving map[
 		if len(ref.Arguments) != 1 {
 			return types.Type{}, fmt.Errorf("optional requires exactly one type")
 		}
-		e, err := resolveType(ref.Arguments[0], aliases, resolving)
+		e, err := resolveType(ref.Arguments[0], aliases, resolving, gen, generics)
 		if err != nil {
 			return types.Type{}, err
 		}
@@ -64,11 +64,11 @@ func resolveType(ref ast.TypeRef, aliases map[string]ast.TypeRef, resolving map[
 		if len(ref.Arguments) != 2 {
 			return types.Type{}, fmt.Errorf("result requires ok and err types")
 		}
-		okt, err := resolveType(ref.Arguments[0], aliases, resolving)
+		okt, err := resolveType(ref.Arguments[0], aliases, resolving, gen, generics)
 		if err != nil {
 			return types.Type{}, err
 		}
-		errt, err := resolveType(ref.Arguments[1], aliases, resolving)
+		errt, err := resolveType(ref.Arguments[1], aliases, resolving, gen, generics)
 		if err != nil {
 			return types.Type{}, err
 		}
@@ -77,7 +77,7 @@ func resolveType(ref ast.TypeRef, aliases map[string]ast.TypeRef, resolving map[
 		if len(ref.Arguments) != 1 {
 			return types.Type{}, fmt.Errorf("array requires exactly one element type")
 		}
-		e, err := resolveType(ref.Arguments[0], aliases, resolving)
+		e, err := resolveType(ref.Arguments[0], aliases, resolving, gen, generics)
 		if err != nil {
 			return types.Type{}, err
 		}
@@ -86,11 +86,11 @@ func resolveType(ref ast.TypeRef, aliases map[string]ast.TypeRef, resolving map[
 		if len(ref.Arguments) != 2 {
 			return types.Type{}, fmt.Errorf("map requires key and value types")
 		}
-		k, err := resolveType(ref.Arguments[0], aliases, resolving)
+		k, err := resolveType(ref.Arguments[0], aliases, resolving, gen, generics)
 		if err != nil {
 			return types.Type{}, err
 		}
-		v, err := resolveType(ref.Arguments[1], aliases, resolving)
+		v, err := resolveType(ref.Arguments[1], aliases, resolving, gen, generics)
 		if err != nil {
 			return types.Type{}, err
 		}
@@ -99,7 +99,7 @@ func resolveType(ref ast.TypeRef, aliases map[string]ast.TypeRef, resolving map[
 		if len(ref.Arguments) != 1 {
 			return types.Type{}, fmt.Errorf("set requires exactly one element type")
 		}
-		e, err := resolveType(ref.Arguments[0], aliases, resolving)
+		e, err := resolveType(ref.Arguments[0], aliases, resolving, gen, generics)
 		if err != nil {
 			return types.Type{}, err
 		}
@@ -108,7 +108,7 @@ func resolveType(ref ast.TypeRef, aliases map[string]ast.TypeRef, resolving map[
 		items := make([]types.Type, len(ref.Arguments))
 		for i := range ref.Arguments {
 			var err error
-			items[i], err = resolveType(ref.Arguments[i], aliases, resolving)
+			items[i], err = resolveType(ref.Arguments[i], aliases, resolving, gen, generics)
 			if err != nil {
 				return types.Type{}, err
 			}
@@ -117,7 +117,7 @@ func resolveType(ref ast.TypeRef, aliases map[string]ast.TypeRef, resolving map[
 	case "record", "object":
 		fields := make([]types.Field, len(ref.Fields))
 		for i, f := range ref.Fields {
-			ft, err := resolveType(f.Type, aliases, resolving)
+			ft, err := resolveType(f.Type, aliases, resolving, gen, generics)
 			if err != nil {
 				return types.Type{}, err
 			}
@@ -129,6 +129,54 @@ func resolveType(ref ast.TypeRef, aliases map[string]ast.TypeRef, resolving map[
 			return types.Type{}, err
 		}
 	default:
+		if gen != nil {
+			if gt, ok := gen[ref.Name]; ok {
+				if len(ref.Arguments) > 0 {
+					return types.Type{}, fmt.Errorf("generic parameter %q does not accept type arguments", ref.Name)
+				}
+				t = gt
+				break
+			}
+		}
+		if generics != nil {
+			if gd, ok := generics[ref.Name]; ok {
+				if resolving[ref.Name] {
+					return types.Type{}, fmt.Errorf("cyclic generic type alias %q", ref.Name)
+				}
+				if len(ref.Arguments) != len(gd.params) {
+					return types.Type{}, fmt.Errorf("generic %s requires %d type arguments, got %d", ref.Name, len(gd.params), len(ref.Arguments))
+				}
+				sub := map[string]types.Type{}
+				local := typeParamEnv(gd.owner, gd.params)
+				for i, a := range ref.Arguments {
+					at, err := resolveType(a, aliases, resolving, gen, generics)
+					if err != nil {
+						return types.Type{}, err
+					}
+					if gd.params[i].Constraint != nil {
+						ct, err := resolveType(*gd.params[i].Constraint, aliases, resolving, local, generics)
+						if err != nil {
+							return types.Type{}, err
+						}
+						if !at.AssignableTo(ct) {
+							return types.Type{}, fmt.Errorf("type argument %s violates constraint %s", at.String(), ct.String())
+						}
+					}
+					sub[local[gd.params[i].Name].TypeParamID()] = at
+				}
+				resolving[ref.Name] = true
+				body, err := resolveType(gd.body, aliases, resolving, local, generics)
+				delete(resolving, ref.Name)
+				if err != nil {
+					return types.Type{}, err
+				}
+				t, err = substituteType(body, sub, 0)
+				if err != nil {
+					return types.Type{}, err
+				}
+				break
+			}
+		}
 		if len(ref.Name) > 0 && (ref.Name[0] == '"' || ref.Name[0] == '\'') {
 			t = types.Literal(types.String, ref.Name)
 			break
@@ -149,7 +197,7 @@ func resolveType(ref ast.TypeRef, aliases map[string]ast.TypeRef, resolving map[
 		}
 		resolving[ref.Name] = true
 		var err error
-		t, err = resolveType(alias, aliases, resolving)
+		t, err = resolveType(alias, aliases, resolving, gen, generics)
 		delete(resolving, ref.Name)
 		if err != nil {
 			return types.Type{}, err

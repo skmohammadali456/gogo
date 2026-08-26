@@ -11,15 +11,24 @@ func (s *Session) checkTypes(file ast.File) {
 	aliases := make(map[string]ast.TypeRef)
 	interfaces := make(map[string]ast.InterfaceDecl)
 	enumDecls := make(map[string]ast.EnumDecl)
+	genericAliases := make(map[string]genericDecl)
 	for _, stmt := range file.Statements {
 		if a, ok := stmt.(ast.TypeAliasDecl); ok {
 			if _, exists := aliases[a.Name.Name]; exists {
 				s.Diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G3004", Message: "This type alias is declared more than once.", Hint: "Use a unique type alias name.", Span: a.Name.Span})
 				continue
 			}
+			if len(a.TypeParams) > 0 {
+				genericAliases[a.Name.Name] = genericDecl{owner: "type " + a.Name.Name, params: a.TypeParams, body: a.Type}
+				continue
+			}
 			aliases[a.Name.Name] = a.Type
 		}
 		if in, ok := stmt.(ast.InterfaceDecl); ok {
+			if len(in.TypeParams) > 0 {
+				genericAliases[in.Name.Name] = genericDecl{owner: "interface " + in.Name.Name, params: in.TypeParams, body: ast.TypeRef{Span: in.Span, Name: "object", Fields: in.Properties}}
+				continue
+			}
 			if _, exists := interfaces[in.Name.Name]; exists {
 				s.Diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G3101", Message: "This interface is declared more than once.", Hint: "Use a unique interface name.", Span: in.Name.Span})
 			} else {
@@ -42,7 +51,7 @@ func (s *Session) checkTypes(file ast.File) {
 		for i, v := range decl.Variants {
 			var p types.Type
 			if v.Payload != nil {
-				p, _ = s.resolveAnnotation(*v.Payload, aliases)
+				p, _ = s.resolveAnnotation(*v.Payload, aliases, nil, genericAliases)
 			}
 			vs[i] = types.EnumVariant{Name: v.Name.Name, Payload: p}
 		}
@@ -104,7 +113,7 @@ func (s *Session) checkTypes(file ast.File) {
 	for name := range interfaces {
 		resolveInterface(name)
 	}
-	c := checker{s: s, aliases: aliases, enums: enums, env: map[string]binding{}, funcs: map[string]functionSig{}}
+	c := checker{s: s, aliases: aliases, enums: enums, generics: genericAliases, env: map[string]binding{}, funcs: map[string]functionSig{}}
 	c.collectFunctions(file.Statements)
 	c.checkStatements(file.Statements, c.env, types.Type{})
 }
@@ -114,28 +123,31 @@ type binding struct {
 	mutable                     bool
 }
 type functionSig struct {
-	params []types.Type
-	ret    types.Type
+	params     []types.Type
+	ret        types.Type
+	typeParams []ast.GenericParam
+	typeEnv    genericEnv
 }
 type checker struct {
-	s       *Session
-	aliases map[string]ast.TypeRef
-	enums   map[string]types.Type
-	env     map[string]binding
-	funcs   map[string]functionSig
+	s        *Session
+	aliases  map[string]ast.TypeRef
+	enums    map[string]types.Type
+	generics map[string]genericDecl
+	env      map[string]binding
+	funcs    map[string]functionSig
 }
 
 func (c *checker) collectFunctions(stmts []ast.Stmt) {
 	for _, st := range stmts {
 		if fn, ok := st.(ast.FunctionDecl); ok {
-			sig := functionSig{params: make([]types.Type, len(fn.Parameters))}
+			sig := functionSig{params: make([]types.Type, len(fn.Parameters)), typeParams: fn.TypeParams, typeEnv: typeParamEnv("func "+fn.Name.Name, fn.TypeParams)}
 			for i, tr := range fn.ParameterTypes {
 				if tr != nil {
-					sig.params[i], _ = c.s.resolveAnnotation(*tr, c.aliases)
+					sig.params[i], _ = c.s.resolveAnnotation(*tr, c.aliases, sig.typeEnv, c.generics)
 				}
 			}
 			if fn.ReturnType != nil {
-				sig.ret, _ = c.s.resolveAnnotation(*fn.ReturnType, c.aliases)
+				sig.ret, _ = c.s.resolveAnnotation(*fn.ReturnType, c.aliases, sig.typeEnv, c.generics)
 			}
 			c.funcs[fn.Name.Name] = sig
 		}
@@ -160,7 +172,7 @@ func (c *checker) checkStatement(stmt ast.Stmt, env map[string]binding, ret type
 		var target types.Type
 		hasTarget := false
 		if n.Type != nil {
-			if t, ok := c.s.resolveAnnotation(*n.Type, c.aliases); ok {
+			if t, ok := c.s.resolveAnnotation(*n.Type, c.aliases, nil, c.generics); ok {
 				target = t
 				hasTarget = true
 			}
@@ -329,20 +341,111 @@ func (c *checker) infer(e ast.Expr, ctx types.Type, hasCtx bool, env map[string]
 		}
 		if id, ok := x.Callee.(ast.Identifier); ok {
 			if sig, exists := c.funcs[id.Name]; exists {
+				callParams, callRet, ok := c.instantiateFunctionCall(id.Name, sig, x, ctx, hasCtx, env)
+				if !ok {
+					return types.Type{}, false
+				}
 				for i, a := range x.Arguments {
-					if i < len(sig.params) {
-						at, aok := c.infer(a, sig.params[i], true, env)
-						if aok && !at.AssignableTo(sig.params[i]) {
+					if i < len(callParams) {
+						at, aok := c.infer(a, callParams[i], true, env)
+						if aok && !at.AssignableTo(callParams[i]) {
 							c.s.typeError("G3002", a, "This argument is not assignable to the parameter type.", "Pass a value with the declared parameter type.")
 						}
 					}
 				}
-				return sig.ret, sig.ret.Kind() != types.Invalid
+				return callRet, callRet.Kind() != types.Invalid
 			}
 		}
 	}
 	return expressionType(e)
 }
+
+func (c *checker) instantiateFunctionCall(name string, sig functionSig, x ast.CallExpr, ctx types.Type, hasCtx bool, env map[string]binding) ([]types.Type, types.Type, bool) {
+	if len(sig.typeParams) == 0 {
+		if len(x.Arguments) != len(sig.params) {
+			c.diag("G3204", x.Span, "This call has the wrong number of arguments.", "Pass exactly the declared number of arguments.")
+			return nil, types.Type{}, false
+		}
+		if len(x.TypeArguments) > 0 {
+			c.diag("G3204", x.Span, "This function is not generic.", "Remove type arguments from this call.")
+			return nil, types.Type{}, false
+		}
+		return sig.params, sig.ret, true
+	}
+	if len(x.Arguments) != len(sig.params) {
+		c.diag("G3204", x.Span, "This call has the wrong number of arguments.", "Pass exactly the declared number of arguments.")
+		return nil, types.Type{}, false
+	}
+	if len(x.TypeArguments) > 0 && len(x.TypeArguments) != len(sig.typeParams) {
+		c.diag("G3204", x.Span, "This call has the wrong number of type arguments.", "Pass exactly the declared number of generic arguments.")
+		return nil, types.Type{}, false
+	}
+	inf := map[string]types.Type{}
+	if len(x.TypeArguments) > 0 {
+		for i, a := range x.TypeArguments {
+			at, ok := c.s.resolveAnnotation(a, c.aliases, nil, c.generics)
+			if !ok {
+				return nil, types.Type{}, false
+			}
+			inf[sig.typeEnv[sig.typeParams[i].Name].TypeParamID()] = at
+		}
+	} else {
+		for i, a := range x.Arguments {
+			if i >= len(sig.params) {
+				continue
+			}
+			at, ok := c.infer(a, types.Type{}, false, env)
+			if ok && !bindInference(sig.params[i], at, inf) {
+				c.diag("G3205", ast.SpanOf(a), "I could not infer this generic type argument safely.", "Use compatible argument types or pass explicit type arguments.")
+				return nil, types.Type{}, false
+			}
+		}
+		if hasCtx && !bindInference(sig.ret, ctx, inf) {
+			c.diag("G3205", x.Span, "I could not infer this generic type argument from the contextual type.", "Use a compatible contextual type or pass explicit type arguments.")
+			return nil, types.Type{}, false
+		}
+	}
+	for _, p := range sig.typeParams {
+		id := sig.typeEnv[p.Name].TypeParamID()
+		actual, ok := inf[id]
+		if !ok {
+			c.diag("G3205", x.Span, "I could not infer this generic type argument.", "Pass explicit type arguments or add more precise annotations.")
+			return nil, types.Type{}, false
+		}
+		if p.Constraint != nil {
+			ct, cok := c.s.resolveAnnotation(*p.Constraint, c.aliases, sig.typeEnv, c.generics)
+			if !cok {
+				return nil, types.Type{}, false
+			}
+			sub := map[string]types.Type{id: actual}
+			ct, _ = substituteType(ct, sub, 0)
+			if !actual.AssignableTo(ct) {
+				c.diag("G3206", x.Span, "This type argument violates its generic constraint.", "Use a type assignable to the declared constraint.")
+				return nil, types.Type{}, false
+			}
+		}
+	}
+	sub := map[string]types.Type{}
+	for _, p := range sig.typeParams {
+		sub[sig.typeEnv[p.Name].TypeParamID()] = inf[sig.typeEnv[p.Name].TypeParamID()]
+	}
+	params := make([]types.Type, len(sig.params))
+	for i := range sig.params {
+		var err error
+		params[i], err = substituteType(sig.params[i], sub, 0)
+		if err != nil {
+			c.diag("G3207", x.Span, "Generic instantiation did not terminate safely.", err.Error())
+			return nil, types.Type{}, false
+		}
+	}
+	ret, err := substituteType(sig.ret, sub, 0)
+	if err != nil {
+		c.diag("G3207", x.Span, "Generic instantiation did not terminate safely.", err.Error())
+		return nil, types.Type{}, false
+	}
+	return params, ret, true
+}
+
 func (c *checker) inferObject(x ast.ObjectExpr, ctx types.Type, hasCtx bool, env map[string]binding) (types.Type, bool) {
 	fields := make([]types.Field, 0, len(x.Properties))
 	for _, p := range x.Properties {
@@ -739,8 +842,8 @@ func narrowProperty(env map[string]binding, name, prop string, exists bool) {
 	}
 }
 
-func (s *Session) resolveAnnotation(ref ast.TypeRef, aliases map[string]ast.TypeRef) (types.Type, bool) {
-	t, err := resolveType(ref, aliases, map[string]bool{})
+func (s *Session) resolveAnnotation(ref ast.TypeRef, aliases map[string]ast.TypeRef, gen genericEnv, generics map[string]genericDecl) (types.Type, bool) {
+	t, err := resolveType(ref, aliases, map[string]bool{}, gen, generics)
 	if err != nil {
 		s.Diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G3001", Message: "This type annotation is not a supported canonical GOGO type.", Hint: err.Error(), Span: ref.Span})
 		return types.Type{}, false

@@ -70,7 +70,7 @@ Add interfaces, enum-like constructs, discriminated variants, interface extensio
 
 **15. Generics**
 
-Implement generic functions, generic types, generic components, constraints, inference, defaults where justified, and readable generic diagnostics.
+Status: **COMPLETE**. GOGO now supports declaration-scoped canonical type parameters, generic functions, generic aliases/types, generic components at the language/type level, constraints using existing assignability, explicit and inferred function type arguments, contextual inference, recursive structural substitution, localized diagnostics, JSON output, and a documented erased runtime boundary. Generic defaults are intentionally not implemented because no current grammar/README syntax justifies them. See `docs/compiler/generics.md`.
 
 **16. Functions and closures**
 

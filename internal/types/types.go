@@ -30,10 +30,12 @@ const (
 	ResultKind
 	EnumKind
 	EnumVariantKind
+	TypeParamKind
+	GenericInstanceKind
 )
 
 func (k Kind) String() string {
-	names := []string{"invalid", "string", "number", "boolean", "bigint", "bytes", "array", "map", "set", "tuple", "record", "literal", "optional", "union", "intersection", "result", "enum", "enum variant"}
+	names := []string{"invalid", "string", "number", "boolean", "bigint", "bytes", "array", "map", "set", "tuple", "record", "literal", "optional", "union", "intersection", "result", "enum", "enum variant", "type parameter", "generic instance"}
 	if int(k) >= len(names) {
 		return "invalid"
 	}
@@ -43,15 +45,17 @@ func (k Kind) String() string {
 // Type is an immutable value type. Its unexported fields prevent callers from
 // changing collection members after construction. The zero Type is Invalid.
 type Type struct {
-	kind                  Kind
-	base                  Kind // the primitive kind represented by a literal
-	text                  string
-	element, key, value   *Type
-	members               []Type
-	fields                []Field // always sorted by Name; record ordering is not semantic
-	index                 *IndexSignature
-	mutable               bool
-	enumName, variantName string
+	kind                   Kind
+	base                   Kind // the primitive kind represented by a literal
+	text                   string
+	element, key, value    *Type
+	members                []Type
+	fields                 []Field // always sorted by Name; record ordering is not semantic
+	index                  *IndexSignature
+	mutable                bool
+	enumName, variantName  string
+	genericID, genericName string
+	typeArgs               []Type
 }
 
 // EnumVariant describes one deterministic enum case. Payload is optional.
@@ -159,6 +163,9 @@ func (t Type) IndexSignature() (IndexSignature, bool) {
 func (t Type) LiteralBase() (Kind, bool) { return t.base, t.kind == LiteralKind }
 func (t Type) Ok() (Type, bool)          { return t.Key() }
 func (t Type) Err() (Type, bool)         { return t.Value() }
+func (t Type) TypeParamID() string       { return t.genericID }
+func (t Type) TypeParamName() string     { return t.genericName }
+func (t Type) TypeArguments() []Type     { return append([]Type(nil), t.typeArgs...) }
 
 // Array, Map, and Set are mutable collection values by default. Tuple and
 // Record are immutable value aggregates.
@@ -190,6 +197,16 @@ func MustIntersection(members ...Type) Type {
 		panic(err)
 	}
 	return t
+}
+func TypeParam(id, name string) Type {
+	return Type{kind: TypeParamKind, genericID: id, genericName: name}
+}
+func GenericInstance(name string, args ...Type) Type {
+	out := make([]Type, len(args))
+	for i := range args {
+		out[i] = Normalize(args[i])
+	}
+	return Type{kind: GenericInstanceKind, genericName: name, typeArgs: out}
 }
 func Result(ok, err Type) Type {
 	ok = Normalize(ok)
@@ -281,6 +298,10 @@ func Normalize(t Type) Type {
 		ok, er := Normalize(*t.key), Normalize(*t.value)
 		t.key, t.value = copyType(ok), copyType(er)
 		t.mutable = ok.mutable || er.mutable
+	case GenericInstanceKind:
+		for i := range t.typeArgs {
+			t.typeArgs[i] = Normalize(t.typeArgs[i])
+		}
 	case UnionKind, IntersectionKind:
 		n, _ := normalizedComposite(t.kind, t.members...)
 		return n
@@ -416,8 +437,13 @@ func (t Type) isPrimitive() bool { return t.kind >= StringKind && t.kind <= Byte
 // Equal is deterministic structural equality. Literal types compare their
 // primitive base and exact canonical literal text; records are name-sorted.
 func (t Type) Equal(u Type) bool {
-	if t.kind != u.kind || t.mutable != u.mutable || t.base != u.base || t.text != u.text || t.enumName != u.enumName || t.variantName != u.variantName {
+	if t.kind != u.kind || t.mutable != u.mutable || t.base != u.base || t.text != u.text || t.enumName != u.enumName || t.variantName != u.variantName || t.genericID != u.genericID || t.genericName != u.genericName || len(t.typeArgs) != len(u.typeArgs) {
 		return false
+	}
+	for i := range t.typeArgs {
+		if !t.typeArgs[i].Equal(u.typeArgs[i]) {
+			return false
+		}
 	}
 	if !samePtr(t.element, u.element) || !samePtr(t.key, u.key) || !samePtr(t.value, u.value) || len(t.members) != len(u.members) || len(t.fields) != len(u.fields) {
 		return false
@@ -583,6 +609,10 @@ func (t Type) String() string {
 			body = "record{[string]: " + t.index.Value.String() + ", " + strings.Join(parts, ", ") + "}"
 		}
 		return body
+	case GenericInstanceKind:
+		return t.genericName + "<" + join(t.typeArgs) + ">"
+	case TypeParamKind:
+		return t.genericName + "#" + t.genericID
 	case EnumKind:
 		return "enum " + t.enumName
 	case EnumVariantKind:

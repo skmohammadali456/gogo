@@ -55,9 +55,10 @@ func (BinaryExpr) node() {}
 func (BinaryExpr) expr() {}
 
 type CallExpr struct {
-	Span      source.Span
-	Callee    Expr
-	Arguments []Expr
+	Span          source.Span
+	Callee        Expr
+	TypeArguments []TypeRef
+	Arguments     []Expr
 }
 
 func (CallExpr) node() {}
@@ -66,6 +67,7 @@ func (CallExpr) expr() {}
 type FunctionDecl struct {
 	Span           source.Span
 	Name           Identifier
+	TypeParams     []GenericParam
 	Parameters     []Identifier
 	ParameterTypes []*TypeRef
 	ReturnType     *TypeRef
