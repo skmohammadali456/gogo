@@ -10,10 +10,11 @@ import (
 )
 
 type Parser struct {
-	tokens      []token.Token
-	pos         int
-	vocabulary  grammar.Vocabulary
-	diagnostics diagnostics.Bag
+	tokens           []token.Token
+	pos              int
+	vocabulary       grammar.Vocabulary
+	diagnostics      diagnostics.Bag
+	syntheticGreater []token.Token
 }
 
 // Option configures a parser instance.
@@ -169,6 +170,7 @@ func (p *Parser) parseEnum(start source.Position) ast.Stmt {
 func (p *Parser) parseInterface(start source.Position) ast.Stmt {
 	p.advance()
 	n := p.expect(token.Identifier, "G2044", "I expected an interface name.", "Give the interface a unique name.")
+	typeParams := p.parseGenericParams()
 	var ex []ast.Identifier
 	if p.atKeyword(grammar.KeywordExtends) {
 		p.advance()
@@ -222,7 +224,7 @@ func (p *Parser) parseInterface(start source.Position) ast.Stmt {
 		end = p.advance().Span.End
 	}
 	p.consumeTerminator()
-	return ast.InterfaceDecl{Span: source.Span{Start: start, End: end}, Name: ast.Identifier{Span: n.Span, Name: n.Text}, Extends: ex, Properties: fs}
+	return ast.InterfaceDecl{Span: source.Span{Start: start, End: end}, Name: ast.Identifier{Span: n.Span, Name: n.Text}, TypeParams: typeParams, Extends: ex, Properties: fs}
 }
 
 func (p *Parser) parseConciseCreate() ast.Stmt {
@@ -240,6 +242,7 @@ func (p *Parser) parseTypeAlias(start source.Position) ast.Stmt {
 		p.recoverStatement()
 		return nil
 	}
+	typeParams := p.parseGenericParams()
 	if !p.atKeyword(grammar.KeywordAs) {
 		p.error("G3004", "I expected 'as' after the type alias name.", "Write create type Name as Type.")
 		p.recoverStatement()
@@ -248,7 +251,7 @@ func (p *Parser) parseTypeAlias(start source.Position) ast.Stmt {
 	p.advance()
 	typ := p.parseType()
 	p.consumeTerminator()
-	return ast.TypeAliasDecl{Span: source.Span{Start: start, End: typ.Span.End}, Name: ast.Identifier{Span: name.Span, Name: name.Text}, Type: typ}
+	return ast.TypeAliasDecl{Span: source.Span{Start: start, End: typ.Span.End}, Name: ast.Identifier{Span: name.Span, Name: name.Text}, TypeParams: typeParams, Type: typ}
 }
 
 func (p *Parser) parseVariable(start source.Position) ast.Stmt {
@@ -279,6 +282,52 @@ func (p *Parser) parseVariable(start source.Position) ast.Stmt {
 	return ast.VariableDecl{Span: source.Span{Start: start, End: ast.SpanOf(value).End}, Name: ast.Identifier{Span: name.Span, Name: name.Text}, Type: typ, Value: value, Mutable: mutable}
 }
 
+func (p *Parser) parseGenericParams() []ast.GenericParam {
+	if !p.at(token.Less) {
+		return nil
+	}
+	p.advance()
+	var out []ast.GenericParam
+	seen := map[string]bool{}
+	for !p.atTypeGreater() && !p.at(token.EOF) {
+		n := p.expect(token.Identifier, "G3200", "I expected a generic type parameter name.", "Write a name such as T.")
+		if n.Kind == token.Invalid {
+			break
+		}
+		if seen[n.Text] {
+			p.error("G3201", "This generic type parameter is duplicated.", "Use each type parameter name once.")
+		}
+		seen[n.Text] = true
+		gp := ast.GenericParam{Span: n.Span, Name: n.Text}
+		if p.atKeyword(grammar.KeywordExtends) || p.at(token.Colon) {
+			p.advance()
+			c := p.parseType()
+			gp.Constraint = &c
+			gp.Span.End = c.Span.End
+		}
+		out = append(out, gp)
+		if !p.at(token.Comma) {
+			break
+		}
+		p.advance()
+	}
+	p.expectTypeGreater("G3202", "I expected '>' to close generic parameters.", "Close the generic parameter list.")
+	return out
+}
+func (p *Parser) parseTypeArguments() []ast.TypeRef {
+	p.advance()
+	var out []ast.TypeRef
+	for !p.atTypeGreater() && !p.at(token.EOF) {
+		out = append(out, p.parseType())
+		if !p.at(token.Comma) {
+			break
+		}
+		p.advance()
+	}
+	p.expectTypeGreater("G3203", "I expected '>' to close type arguments.", "Close the type argument list.")
+	return out
+}
+
 func (p *Parser) parseFunction(start source.Position) ast.Stmt {
 	p.advance()
 	name := p.expect(token.Identifier, "G2011", "I expected a function name.", "Give the function a name.")
@@ -286,6 +335,7 @@ func (p *Parser) parseFunction(start source.Position) ast.Stmt {
 		p.recoverStatement()
 		return nil
 	}
+	typeParams := p.parseGenericParams()
 	if !p.at(token.LParen) {
 		p.error("G2012", "I expected '(' after the function name.", "Add the function parameter list.")
 		p.recoverStatement()
@@ -334,7 +384,7 @@ func (p *Parser) parseFunction(start source.Position) ast.Stmt {
 	if !ok {
 		return nil
 	}
-	return ast.FunctionDecl{Span: source.Span{Start: start, End: body.Span.End}, Name: ast.Identifier{Span: name.Span, Name: name.Text}, Parameters: params, ParameterTypes: paramTypes, ReturnType: returnType, Body: body}
+	return ast.FunctionDecl{Span: source.Span{Start: start, End: body.Span.End}, Name: ast.Identifier{Span: name.Span, Name: name.Text}, TypeParams: typeParams, Parameters: params, ParameterTypes: paramTypes, ReturnType: returnType, Body: body}
 }
 
 func (p *Parser) parseIf() ast.Stmt {
@@ -504,6 +554,8 @@ func (p *Parser) parsePrefix() ast.Expr {
 func (p *Parser) parsePostfix(expr ast.Expr) ast.Expr {
 	for {
 		switch {
+		case p.at(token.Less) && p.typeArgumentsBeforeCall():
+			expr = p.parseCall(expr)
 		case p.at(token.LParen):
 			expr = p.parseCall(expr)
 		case p.at(token.Dot), p.at(token.QuestionDot):
@@ -535,9 +587,31 @@ func (p *Parser) parsePostfix(expr ast.Expr) ast.Expr {
 	}
 }
 
+func (p *Parser) typeArgumentsBeforeCall() bool {
+	depth := 0
+	for i := p.pos; i < len(p.tokens); i++ {
+		switch p.tokens[i].Kind {
+		case token.Less:
+			depth++
+		case token.Greater:
+			depth--
+			if depth == 0 {
+				return i+1 < len(p.tokens) && p.tokens[i+1].Kind == token.LParen
+			}
+		case token.EOF, token.Semicolon:
+			return false
+		}
+	}
+	return false
+}
+
 func (p *Parser) parseCall(callee ast.Expr) ast.Expr {
 	start := ast.SpanOf(callee).Start
-	p.advance()
+	var typeArgs []ast.TypeRef
+	if p.at(token.Less) {
+		typeArgs = p.parseTypeArguments()
+	}
+	p.expect(token.LParen, "G2012", "I expected ( for this call.", "Add the call argument list.")
 	var args []ast.Expr
 	if !p.at(token.RParen) {
 		for {
@@ -562,7 +636,7 @@ func (p *Parser) parseCall(callee ast.Expr) ast.Expr {
 	} else {
 		p.error("G2010", "This function call is missing a closing parenthesis.", "Add ) after the arguments.")
 	}
-	return ast.CallExpr{Span: source.Span{Start: start, End: end}, Callee: callee, Arguments: args}
+	return ast.CallExpr{Span: source.Span{Start: start, End: end}, Callee: callee, TypeArguments: typeArgs, Arguments: args}
 }
 
 func (p *Parser) parseArray() ast.Expr {
@@ -695,6 +769,9 @@ func isAssignable(expr ast.Expr) bool {
 }
 
 func (p *Parser) current() token.Token {
+	if len(p.syntheticGreater) > 0 {
+		return p.syntheticGreater[len(p.syntheticGreater)-1]
+	}
 	if p.pos >= len(p.tokens) {
 		return token.New(token.EOF, "", source.Span{})
 	}
@@ -702,6 +779,11 @@ func (p *Parser) current() token.Token {
 }
 
 func (p *Parser) advance() token.Token {
+	if len(p.syntheticGreater) > 0 {
+		t := p.syntheticGreater[len(p.syntheticGreater)-1]
+		p.syntheticGreater = p.syntheticGreater[:len(p.syntheticGreater)-1]
+		return t
+	}
 	t := p.current()
 	if p.pos < len(p.tokens) {
 		p.pos++
@@ -716,6 +798,28 @@ func (p *Parser) atKeyword(k grammar.Keyword) bool {
 	}
 	actual, ok := p.vocabulary.Lookup(p.current().Text)
 	return ok && actual == k
+}
+
+func (p *Parser) atTypeGreater() bool {
+	return p.at(token.Greater) || p.at(token.ShiftRight) || p.at(token.UnsignedShiftRight)
+}
+func (p *Parser) expectTypeGreater(code, message, hint string) token.Token {
+	if p.at(token.Greater) {
+		return p.advance()
+	}
+	if p.at(token.ShiftRight) || p.at(token.UnsignedShiftRight) {
+		orig := p.advance()
+		parts := 1
+		if orig.Kind == token.UnsignedShiftRight {
+			parts = 2
+		}
+		for i := 0; i < parts; i++ {
+			p.syntheticGreater = append(p.syntheticGreater, token.New(token.Greater, ">", orig.Span))
+		}
+		return token.New(token.Greater, ">", orig.Span)
+	}
+	p.error(code, message, hint)
+	return token.New(token.Invalid, "", p.current().Span)
 }
 
 func (p *Parser) expect(k token.Kind, code, message, hint string) token.Token {
@@ -767,6 +871,7 @@ func (p *Parser) parseImport() ast.Stmt {
 func (p *Parser) parseComponent(start source.Position) ast.Stmt {
 	p.advance()
 	name := p.expect(token.Identifier, "G2038", "I expected a component name.", "Give the component a name.")
+	typeParams := p.parseGenericParams()
 	if name.Kind == token.Invalid {
 		p.recoverStatement()
 		return nil
@@ -804,7 +909,7 @@ func (p *Parser) parseComponent(start source.Position) ast.Stmt {
 	if !ok {
 		return nil
 	}
-	return ast.ComponentDecl{Span: source.Span{Start: start, End: body.Span.End}, Name: ast.Identifier{Span: name.Span, Name: name.Text}, Properties: props, Body: body}
+	return ast.ComponentDecl{Span: source.Span{Start: start, End: body.Span.End}, Name: ast.Identifier{Span: name.Span, Name: name.Text}, TypeParams: typeParams, Properties: props, Body: body}
 }
 
 func (p *Parser) canEndStatement(expr ast.Expr) bool {
@@ -913,7 +1018,7 @@ func (p *Parser) parsePrimaryType() ast.TypeRef {
 	t := ast.TypeRef{Span: name.Span, Name: name.Text}
 	if p.at(token.Less) {
 		p.advance()
-		for !p.at(token.Greater) && !p.at(token.EOF) {
+		for !p.atTypeGreater() && !p.at(token.EOF) {
 			arg := p.parseType()
 			t.Arguments = append(t.Arguments, arg)
 			if !p.at(token.Comma) {
@@ -921,7 +1026,7 @@ func (p *Parser) parsePrimaryType() ast.TypeRef {
 			}
 			p.advance()
 		}
-		close := p.expect(token.Greater, "G2044", "I expected '>' to close type arguments.", "Close the type argument list with >.")
+		close := p.expectTypeGreater("G2044", "I expected '>' to close type arguments.", "Close the type argument list with >.")
 		if close.Kind != token.Invalid {
 			t.Span.End = close.Span.End
 		}

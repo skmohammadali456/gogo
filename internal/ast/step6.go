@@ -5,6 +5,12 @@ import (
 	"github.com/skmohammadali786/gogo/internal/types"
 )
 
+type GenericParam struct {
+	Span       source.Span
+	Name       string
+	Constraint *TypeRef
+}
+
 type TypeRef struct {
 	Span  source.Span
 	Name  string
@@ -33,9 +39,10 @@ type TypeFieldRef struct {
 // TypeAliasDecl binds a source name to an already canonical type; it does not
 // introduce a second type identity.
 type TypeAliasDecl struct {
-	Span source.Span
-	Name Identifier
-	Type TypeRef
+	Span       source.Span
+	Name       Identifier
+	TypeParams []GenericParam
+	Type       TypeRef
 }
 
 func (TypeAliasDecl) node() {}
@@ -60,6 +67,7 @@ func (EnumDecl) stmt() {}
 type InterfaceDecl struct {
 	Span       source.Span
 	Name       Identifier
+	TypeParams []GenericParam
 	Extends    []Identifier
 	Properties []TypeFieldRef
 }
@@ -87,6 +95,7 @@ type ComponentProp struct {
 type ComponentDecl struct {
 	Span       source.Span
 	Name       Identifier
+	TypeParams []GenericParam
 	Properties []ComponentProp
 	Body       BlockStmt
 }

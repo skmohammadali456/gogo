@@ -174,3 +174,7 @@ Step 13 is complete. The compiler now distinguishes declared, inferred, and cont
 ## Step 14, Enums and interfaces
 
 Status: **COMPLETE**. Canonical enum annotations and variant expressions, payload validation at the Value boundary, interface declarations, structural object contracts, deterministic extension resolution, cycle/missing/conflict diagnostics, and English/Bengali/Hindi vocabulary integration are implemented. See `docs/compiler/enums-interfaces.md`.
+
+## Step 15: Generics
+
+Status: COMPLETE. Implemented declaration-scoped canonical generic type parameters, generic aliases/types, generic functions and component declarations, constraint checking, inference, localized diagnostics, and documentation. Runtime generics are erased at the Step 15 boundary.
