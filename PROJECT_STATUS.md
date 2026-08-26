@@ -8,7 +8,7 @@
 - Release target: GOGO 1.0
 - Completed work packages: 12 / 62
 - Current work package: 12, complete
-- Status: Steps 1 through 12 are complete. Step 12 is ready for review.
+- Status: Steps 1 through 13 are complete. Step 13 is ready for review.
 
 ## Step 1, Compiler source model and positions
 
@@ -165,3 +165,8 @@ Step 11 extends the single canonical `internal/types` model with structural obje
 ## Step 12, Optional, union, intersection, and result types
 
 Step 12 is complete. `internal/types` now owns canonical Optional, Union, Intersection, and Result kinds with recursive normalization, deterministic equality, explicit assignability, mutability propagation, and safe runtime value constructors. The existing parser `parseType` handles `Optional<T>`, `Result<Ok, Err>`, `A | B`, `A & B`, literal members, object members, aliases, and parenthesized combinations through the same `ast.TypeRef` and compiler `ResolveType` path used by Steps 10 and 11. Optional values are explicit absent/present wrappers rather than implicit nulls. Union-to-target assignability requires every possible member to satisfy the target; concrete values satisfy a union by matching one member. Intersections require all member constraints and merge compatible object fields structurally while preserving readonly/optional rules. English, Bengali, and Hindi sessions remain isolated and produce the same canonical types. See `docs/compiler/optional-union-intersection-result.md`.
+
+
+## Step 13, Type inference and narrowing
+
+Step 13 is complete. The compiler now distinguishes declared, inferred, and contextual types; checks annotated initializers authoritatively; infers literals, arrays, objects, calls, aliases, and supported expression forms; and performs branch-local narrowing for Optional, Union, Intersection object members, Result, property existence, and discriminated object unions. Truthiness is limited to Boolean, Optional, Result, and proven union/property/discriminant checks. Control-flow joins restore safe declared types unless early returns make a branch unreachable. UI state remains ordinary canonical object/union/Result/Optional modeling. See `docs/compiler/type-inference-narrowing.md`.
