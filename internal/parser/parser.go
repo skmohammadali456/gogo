@@ -6,6 +6,7 @@ import (
 	"github.com/skmohammadali786/gogo/internal/grammar"
 	"github.com/skmohammadali786/gogo/internal/source"
 	"github.com/skmohammadali786/gogo/internal/token"
+	"strings"
 )
 
 type Parser struct {
@@ -124,6 +125,7 @@ func (p *Parser) parseConciseCreate() ast.Stmt {
 }
 
 func (p *Parser) parseVariable(start source.Position) ast.Stmt {
+	mutable := !p.atKeyword(grammar.KeywordConstant)
 	p.advance()
 	name := p.expect(token.Identifier, "G2002", "I expected a variable name.", "Give the variable a name.")
 	if name.Kind == token.Invalid {
@@ -147,7 +149,7 @@ func (p *Parser) parseVariable(start source.Position) ast.Stmt {
 		return nil
 	}
 	p.consumeTerminator()
-	return ast.VariableDecl{Span: source.Span{Start: start, End: ast.SpanOf(value).End}, Name: ast.Identifier{Span: name.Span, Name: name.Text}, Type: typ, Value: value}
+	return ast.VariableDecl{Span: source.Span{Start: start, End: ast.SpanOf(value).End}, Name: ast.Identifier{Span: name.Span, Name: name.Text}, Type: typ, Value: value, Mutable: mutable}
 }
 
 func (p *Parser) parseFunction(start source.Position) ast.Stmt {
@@ -692,12 +694,29 @@ func (p *Parser) consumeTerminator() {
 }
 
 func (p *Parser) looksLikeTypeThenAs() bool {
-	if p.pos+1 >= len(p.tokens) || p.current().Kind != token.Identifier {
+	if p.current().Kind != token.Identifier {
 		return false
 	}
-	next := p.tokens[p.pos+1]
-	kw, ok := p.vocabulary.Lookup(next.Text)
-	return next.Kind == token.Identifier && ok && kw == grammar.KeywordAs
+	depth := 0
+	for i := p.pos + 1; i < len(p.tokens); i++ {
+		t := p.tokens[i]
+		switch t.Kind {
+		case token.Less, token.LBrace:
+			depth++
+		case token.Greater, token.RBrace:
+			if depth > 0 {
+				depth--
+			}
+		}
+		if depth == 0 && t.Kind == token.Identifier {
+			kw, ok := p.vocabulary.Lookup(t.Text)
+			return ok && kw == grammar.KeywordAs
+		}
+		if depth == 0 && (t.Kind == token.Semicolon || t.Kind == token.EOF) {
+			return false
+		}
+	}
+	return false
 }
 
 func (p *Parser) parseType() ast.TypeRef {
@@ -706,6 +725,40 @@ func (p *Parser) parseType() ast.TypeRef {
 		return ast.TypeRef{Span: name.Span}
 	}
 	t := ast.TypeRef{Span: name.Span, Name: name.Text}
+	if p.at(token.Less) {
+		p.advance()
+		for !p.at(token.Greater) && !p.at(token.EOF) {
+			arg := p.parseType()
+			t.Arguments = append(t.Arguments, arg)
+			if !p.at(token.Comma) {
+				break
+			}
+			p.advance()
+		}
+		close := p.expect(token.Greater, "G2044", "I expected '>' to close type arguments.", "Close the type argument list with >.")
+		if close.Kind != token.Invalid {
+			t.Span.End = close.Span.End
+		}
+	}
+	if strings.EqualFold(t.Name, "Record") || strings.EqualFold(t.Name, "Object") {
+		if p.at(token.LBrace) {
+			p.advance()
+			for !p.at(token.RBrace) && !p.at(token.EOF) {
+				field := p.expect(token.Identifier, "G2044", "I expected a record field name.", "Use name: Type in a record type.")
+				p.expect(token.Colon, "G2044", "I expected ':' after a record field name.", "Write name: Type.")
+				ft := p.parseType()
+				t.Fields = append(t.Fields, ast.TypeFieldRef{Span: source.Span{Start: field.Span.Start, End: ft.Span.End}, Name: field.Text, Type: ft})
+				if !p.at(token.Comma) {
+					break
+				}
+				p.advance()
+			}
+			close := p.expect(token.RBrace, "G2044", "I expected '}' to close record type.", "Close the record type with }.")
+			if close.Kind != token.Invalid {
+				t.Span.End = close.Span.End
+			}
+		}
+	}
 	if p.at(token.LBracket) && p.pos+1 < len(p.tokens) && p.tokens[p.pos+1].Kind == token.RBracket {
 		p.advance()
 		close := p.advance()

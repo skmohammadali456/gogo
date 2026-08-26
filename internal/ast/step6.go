@@ -6,6 +6,16 @@ type TypeRef struct {
 	Span  source.Span
 	Name  string
 	Array bool
+	// Arguments and Fields retain surface annotation structure until the
+	// compiler resolves it through the canonical types package.
+	Arguments []TypeRef
+	Fields    []TypeFieldRef
+}
+
+type TypeFieldRef struct {
+	Span source.Span
+	Name string
+	Type TypeRef
 }
 
 func (TypeRef) node() {}
