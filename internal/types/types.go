@@ -43,12 +43,23 @@ type Type struct {
 	element, key, value *Type
 	members             []Type
 	fields              []Field // always sorted by Name; record ordering is not semantic
+	index               *IndexSignature
 	mutable             bool
 }
 
 type Field struct {
-	Name string
-	Type Type
+	Name     string
+	Type     Type
+	Optional bool
+	Readonly bool
+}
+
+// IndexSignature describes values for arbitrary string property names. It is
+// intentionally canonical and language-independent; the Step 11 parser does
+// not expose an index-signature spelling yet.
+type IndexSignature struct {
+	Key, Value Type
+	Readonly   bool
 }
 
 var (
@@ -79,8 +90,14 @@ func (t Type) Value() (Type, bool) {
 	}
 	return *t.value, true
 }
-func (t Type) Members() []Type           { return append([]Type(nil), t.members...) }
-func (t Type) Fields() []Field           { return append([]Field(nil), t.fields...) }
+func (t Type) Members() []Type { return append([]Type(nil), t.members...) }
+func (t Type) Fields() []Field { return append([]Field(nil), t.fields...) }
+func (t Type) IndexSignature() (IndexSignature, bool) {
+	if t.index == nil {
+		return IndexSignature{}, false
+	}
+	return *t.index, true
+}
 func (t Type) LiteralBase() (Kind, bool) { return t.base, t.kind == LiteralKind }
 
 // Array, Map, and Set are mutable collection values by default. Tuple and
@@ -107,6 +124,27 @@ func Record(fields ...Field) (Type, error) {
 		}
 	}
 	return Type{kind: RecordKind, fields: out}, nil
+}
+
+// Object is the Step 11 structural object constructor. Record remains an alias
+// for compatibility with Step 10; both have exactly one representation.
+func Object(fields ...Field) (Type, error) { return Record(fields...) }
+func MustObject(fields ...Field) Type      { return MustRecord(fields...) }
+func RecordWithIndex(index IndexSignature, fields ...Field) (Type, error) {
+	t, err := Record(fields...)
+	if err != nil {
+		return Type{}, err
+	}
+	if !index.Key.Equal(String) {
+		return Type{}, fmt.Errorf("object index key must be string")
+	}
+	for _, f := range t.fields {
+		if !f.Type.AssignableTo(index.Value) {
+			return Type{}, fmt.Errorf("object field %q is incompatible with index signature", f.Name)
+		}
+	}
+	t.index = &IndexSignature{Key: index.Key, Value: index.Value, Readonly: index.Readonly}
+	return t, nil
 }
 func MustRecord(fields ...Field) Type {
 	t, err := Record(fields...)
@@ -139,11 +177,14 @@ func (t Type) Equal(u Type) bool {
 		}
 	}
 	for i := range t.fields {
-		if t.fields[i].Name != u.fields[i].Name || !t.fields[i].Type.Equal(u.fields[i].Type) {
+		if t.fields[i].Name != u.fields[i].Name || t.fields[i].Optional != u.fields[i].Optional || t.fields[i].Readonly != u.fields[i].Readonly || !t.fields[i].Type.Equal(u.fields[i].Type) {
 			return false
 		}
 	}
-	return true
+	if t.index == nil || u.index == nil {
+		return t.index == nil && u.index == nil
+	}
+	return t.index.Readonly == u.index.Readonly && t.index.Key.Equal(u.index.Key) && t.index.Value.Equal(u.index.Value)
 }
 func samePtr(a, b *Type) bool {
 	if a == nil || b == nil {
@@ -163,7 +204,52 @@ func (t Type) AssignableTo(target Type) bool {
 	if t.kind == LiteralKind && target.isPrimitive() {
 		return t.base == target.kind
 	}
+	if t.kind == RecordKind && target.kind == RecordKind {
+		return assignObject(t, target)
+	}
 	return false
+}
+
+// assignObject is width-subtyping for objects: every target required property
+// must be present in source; source optional cannot satisfy target required.
+// A readonly source cannot satisfy a mutable target, while mutable source may
+// satisfy readonly target. Extra source properties are allowed, except that a
+// target index signature constrains them. Index signatures must be provided by
+// the source as well because arbitrary reads cannot be proven otherwise.
+func assignObject(source, target Type) bool {
+	byName := make(map[string]Field, len(source.fields))
+	for _, f := range source.fields {
+		byName[f.Name] = f
+	}
+	for _, want := range target.fields {
+		got, ok := byName[want.Name]
+		if !ok {
+			if want.Optional {
+				continue
+			}
+			return false
+		}
+		if !want.Optional && got.Optional {
+			return false
+		}
+		if got.Readonly && !want.Readonly {
+			return false
+		}
+		if !got.Type.AssignableTo(want.Type) {
+			return false
+		}
+	}
+	if target.index != nil {
+		if source.index == nil || (source.index.Readonly && !target.index.Readonly) || !source.index.Key.AssignableTo(target.index.Key) || !source.index.Value.AssignableTo(target.index.Value) {
+			return false
+		}
+		for _, f := range source.fields {
+			if !f.Type.AssignableTo(target.index.Value) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (t Type) String() string {
@@ -181,9 +267,21 @@ func (t Type) String() string {
 	case RecordKind:
 		parts := make([]string, len(t.fields))
 		for i, f := range t.fields {
-			parts[i] = f.Name + ": " + f.Type.String()
+			prefix := ""
+			if f.Readonly {
+				prefix = "readonly "
+			}
+			suffix := ""
+			if f.Optional {
+				suffix = "?"
+			}
+			parts[i] = prefix + f.Name + suffix + ": " + f.Type.String()
 		}
-		return "record{" + strings.Join(parts, ", ") + "}"
+		body := "record{" + strings.Join(parts, ", ") + "}"
+		if t.index != nil {
+			body = "record{[string]: " + t.index.Value.String() + ", " + strings.Join(parts, ", ") + "}"
+		}
+		return body
 	default:
 		return t.kind.String()
 	}

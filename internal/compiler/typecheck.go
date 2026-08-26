@@ -11,8 +11,18 @@ import (
 // later roadmap work; this verifier never pretends those features exist.
 func (s *Session) checkTypes(file ast.File) {
 	bindings := make(map[string]binding)
+	aliases := make(map[string]ast.TypeRef)
 	for _, stmt := range file.Statements {
-		s.checkStatementTypes(stmt, bindings)
+		if a, ok := stmt.(ast.TypeAliasDecl); ok {
+			if _, exists := aliases[a.Name.Name]; exists {
+				s.Diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G3004", Message: "This type alias is declared more than once.", Hint: "Use a unique type alias name.", Span: a.Name.Span})
+				continue
+			}
+			aliases[a.Name.Name] = a.Type
+		}
+	}
+	for _, stmt := range file.Statements {
+		s.checkStatementTypes(stmt, bindings, aliases)
 	}
 }
 
@@ -21,13 +31,13 @@ type binding struct {
 	mutable bool
 }
 
-func (s *Session) checkStatementTypes(stmt ast.Stmt, bindings map[string]binding) {
+func (s *Session) checkStatementTypes(stmt ast.Stmt, bindings map[string]binding, aliases map[string]ast.TypeRef) {
 	switch n := stmt.(type) {
 	case ast.VariableDecl:
 		var target types.Type
 		if n.Type != nil {
 			var ok bool
-			target, ok = s.resolveAnnotation(*n.Type)
+			target, ok = s.resolveAnnotation(*n.Type, aliases)
 			if !ok {
 				return
 			}
@@ -45,15 +55,15 @@ func (s *Session) checkStatementTypes(stmt ast.Stmt, bindings map[string]binding
 	case ast.FunctionDecl:
 		for _, t := range n.ParameterTypes {
 			if t != nil {
-				s.resolveAnnotation(*t)
+				s.resolveAnnotation(*t, aliases)
 			}
 		}
 		if n.ReturnType != nil {
-			s.resolveAnnotation(*n.ReturnType)
+			s.resolveAnnotation(*n.ReturnType, aliases)
 		}
 	case ast.BlockStmt:
 		for _, child := range n.Statements {
-			s.checkStatementTypes(child, bindings)
+			s.checkStatementTypes(child, bindings, aliases)
 		}
 	}
 }
@@ -78,8 +88,8 @@ func (s *Session) checkAssignment(expr ast.Expr, bindings map[string]binding) {
 		s.typeError("G3002", assign.Right, "This value is not assignable to the declared type.", "Use a value with the declared canonical type.")
 	}
 }
-func (s *Session) resolveAnnotation(ref ast.TypeRef) (types.Type, bool) {
-	t, err := ResolveType(ref)
+func (s *Session) resolveAnnotation(ref ast.TypeRef, aliases map[string]ast.TypeRef) (types.Type, bool) {
+	t, err := resolveType(ref, aliases, map[string]bool{})
 	if err != nil {
 		s.Diagnostics.Add(diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "G3001", Message: "This type annotation is not a supported canonical GOGO type.", Hint: err.Error(), Span: ref.Span})
 		return types.Type{}, false

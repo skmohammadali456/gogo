@@ -95,16 +95,26 @@ func RecordValue(t Type, fields map[string]Value) (Value, error) {
 		return Value{}, fmt.Errorf("record value requires a record type")
 	}
 	expected := t.Fields()
-	if len(fields) != len(expected) {
-		return Value{}, fmt.Errorf("record field set does not match record type")
+	byName := make(map[string]Field, len(expected))
+	for _, f := range expected {
+		byName[f.Name] = f
 	}
 	copyFields := make(map[string]Value, len(fields))
-	for _, f := range expected {
-		v, ok := fields[f.Name]
-		if !ok || !v.typ.AssignableTo(f.Type) {
-			return Value{}, fmt.Errorf("record field %q is incompatible", f.Name)
+	for name, v := range fields {
+		f, known := byName[name]
+		if known {
+			if !v.typ.AssignableTo(f.Type) {
+				return Value{}, fmt.Errorf("record field %q is incompatible", name)
+			}
+		} else if index, ok := t.IndexSignature(); !ok || !v.typ.AssignableTo(index.Value) {
+			return Value{}, fmt.Errorf("record field %q is not allowed", name)
 		}
-		copyFields[f.Name] = v
+		copyFields[name] = v
+	}
+	for _, f := range expected {
+		if _, ok := fields[f.Name]; !ok && !f.Optional {
+			return Value{}, fmt.Errorf("record field %q is required", f.Name)
+		}
 	}
 	return Value{typ: t, data: copyFields}, nil
 }

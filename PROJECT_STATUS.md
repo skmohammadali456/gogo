@@ -6,9 +6,9 @@
 - Compiler implementation language: Go
 - Repository: `skmohammadali786/gogo`
 - Release target: GOGO 1.0
-- Completed work packages: 10 / 62
-- Current work package: 10, complete
-- Status: Steps 1 through 10 are complete. Step 10 is ready for review.
+- Completed work packages: 11 / 62
+- Current work package: 11, complete
+- Status: Steps 1 through 11 are complete. Step 11 is ready for review.
 
 ## Step 1, Compiler source model and positions
 
@@ -153,3 +153,10 @@ Step 9 adds a single project-level `gogo.json` configuration model, deterministi
 Status: **COMPLETE**
 
 Step 10 adds `internal/types`, the single canonical language-independent type model. It defines immutable primitive identities for string, number, boolean, bigint, and bytes; structural array, map, set, tuple, and closed record types; literal types; deterministic equality; explicit invariant assignability; and collection mutability. `compiler.ResolveType` is the one surface-annotation conversion path, preserving the one lexer/parser/AST/grammar/compiler architecture. Declarations and function signatures now validate canonical type annotations, with G3001/G3002 diagnostics. English, Bengali, and Hindi sessions use exactly the same type identities. The limited `types.Value` runtime boundary is intentionally not a full execution runtime. See `docs/compiler/type-system.md`.
+
+
+## Step 11, Object types and type aliases
+
+Status: **COMPLETE**
+
+Step 11 extends the single canonical `internal/types` model with structural object properties, optional and readonly metadata, deterministic order-independent equality, structural assignability, canonical string index signatures, and safe runtime object validation. `create type Name as Type` aliases resolve within an isolated compiler session to canonical target types; duplicates, unresolved aliases, and cycles are diagnosed. English, Bengali, and Hindi keyword spellings are handled through `grammar.Vocabulary`. The parser intentionally has no invented index-signature syntax; the canonical API documents that surface boundary. See `docs/compiler/object-types-aliases.md`.

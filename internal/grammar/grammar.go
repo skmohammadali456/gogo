@@ -28,6 +28,8 @@ const (
 	KeywordImport
 	KeywordFrom
 	KeywordComponent
+	KeywordType
+	KeywordReadonly
 )
 
 func (k Keyword) String() string {
@@ -54,6 +56,10 @@ func (k Keyword) String() string {
 		return "from"
 	case KeywordComponent:
 		return "component"
+	case KeywordType:
+		return "type"
+	case KeywordReadonly:
+		return "readonly"
 	default:
 		return "unknown"
 	}
@@ -84,6 +90,10 @@ func ParseKeyword(name string) (Keyword, bool) {
 		return KeywordFrom, true
 	case "component":
 		return KeywordComponent, true
+	case "type":
+		return KeywordType, true
+	case "readonly":
+		return KeywordReadonly, true
 	default:
 		return KeywordUnknown, false
 	}
@@ -135,7 +145,7 @@ var vocabularies = map[Language]Vocabulary{
 	English: NewVocabulary(English, "English", []Entry{
 		{"create", KeywordCreate}, {"variable", KeywordVariable}, {"function", KeywordFunction},
 		{"as", KeywordAs}, {"return", KeywordReturn}, {"if", KeywordIf}, {"else", KeywordElse},
-		{"constant", KeywordConstant}, {"import", KeywordImport}, {"from", KeywordFrom}, {"component", KeywordComponent},
+		{"constant", KeywordConstant}, {"import", KeywordImport}, {"from", KeywordFrom}, {"component", KeywordComponent}, {"type", KeywordType}, {"readonly", KeywordReadonly},
 		{"let", KeywordVariable}, {"var", KeywordVariable}, {"const", KeywordConstant}, {"fn", KeywordFunction},
 	}),
 	Bengali: NewVocabulary(Bengali, "Bengali", []Entry{
@@ -149,7 +159,7 @@ var vocabularies = map[Language]Vocabulary{
 		{"নইলে", KeywordElse}, {"অন্যথায়", KeywordElse},
 		{"আমদানি", KeywordImport}, {"ইমপোর্ট", KeywordImport},
 		{"থেকে", KeywordFrom},
-		{"কম্পোনেন্ট", KeywordComponent}, {"উপাদান", KeywordComponent},
+		{"কম্পোনেন্ট", KeywordComponent}, {"উপাদান", KeywordComponent}, {"ধরন", KeywordType}, {"শুধু_পঠন", KeywordReadonly},
 	}),
 	Hindi: NewVocabulary(Hindi, "Hindi", []Entry{
 		{"बनाओ", KeywordCreate}, {"निर्माण", KeywordCreate},
@@ -162,7 +172,7 @@ var vocabularies = map[Language]Vocabulary{
 		{"वरना", KeywordElse}, {"अन्यथा", KeywordElse},
 		{"आयात", KeywordImport}, {"लाओ", KeywordImport},
 		{"से", KeywordFrom},
-		{"घटक", KeywordComponent}, {"अवयव", KeywordComponent},
+		{"घटक", KeywordComponent}, {"अवयव", KeywordComponent}, {"प्रकार", KeywordType}, {"केवल_पढ़ने", KeywordReadonly},
 	}),
 }
 

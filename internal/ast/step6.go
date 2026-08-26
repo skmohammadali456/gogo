@@ -13,10 +13,23 @@ type TypeRef struct {
 }
 
 type TypeFieldRef struct {
+	Span     source.Span
+	Name     string
+	Type     TypeRef
+	Optional bool
+	Readonly bool
+}
+
+// TypeAliasDecl binds a source name to an already canonical type; it does not
+// introduce a second type identity.
+type TypeAliasDecl struct {
 	Span source.Span
-	Name string
+	Name Identifier
 	Type TypeRef
 }
+
+func (TypeAliasDecl) node() {}
+func (TypeAliasDecl) stmt() {}
 
 func (TypeRef) node() {}
 

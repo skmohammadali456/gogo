@@ -54,7 +54,7 @@ Status: **COMPLETE**. A canonical language-independent type model now provides s
 
 **11. Object types and type aliases**
 
-Add structural object types and named type aliases. Support nested properties, readonly properties, optional properties, index signatures where appropriate, and clear compatibility rules.
+Status: **COMPLETE**. Structural object properties, optionality, readonly compatibility, deterministic equality, session-scoped aliases, and canonical index-signature support are implemented without a second type system. See `docs/compiler/object-types-aliases.md`.
 
 **12. Optional, union, intersection, and result types**
 

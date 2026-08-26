@@ -111,6 +111,9 @@ func (p *Parser) parseCreate() ast.Stmt {
 	if p.atKeyword(grammar.KeywordComponent) {
 		return p.parseComponent(start)
 	}
+	if p.atKeyword(grammar.KeywordType) {
+		return p.parseTypeAlias(start)
+	}
 	p.error("G2001", "I expected a declaration keyword after 'create'.", "Write create variable name as value, create function name(...), or create component Name { ... }.")
 	p.recoverStatement()
 	return nil
@@ -122,6 +125,24 @@ func (p *Parser) parseConciseCreate() ast.Stmt {
 		return p.parseFunction(start)
 	}
 	return p.parseVariable(start)
+}
+
+func (p *Parser) parseTypeAlias(start source.Position) ast.Stmt {
+	p.advance()
+	name := p.expect(token.Identifier, "G3004", "I expected a type alias name.", "Give the alias a unique identifier.")
+	if name.Kind == token.Invalid {
+		p.recoverStatement()
+		return nil
+	}
+	if !p.atKeyword(grammar.KeywordAs) {
+		p.error("G3004", "I expected 'as' after the type alias name.", "Write create type Name as Type.")
+		p.recoverStatement()
+		return nil
+	}
+	p.advance()
+	typ := p.parseType()
+	p.consumeTerminator()
+	return ast.TypeAliasDecl{Span: source.Span{Start: start, End: typ.Span.End}, Name: ast.Identifier{Span: name.Span, Name: name.Text}, Type: typ}
 }
 
 func (p *Parser) parseVariable(start source.Position) ast.Stmt {
@@ -744,10 +765,20 @@ func (p *Parser) parseType() ast.TypeRef {
 		if p.at(token.LBrace) {
 			p.advance()
 			for !p.at(token.RBrace) && !p.at(token.EOF) {
+				readonly := false
+				if p.atKeyword(grammar.KeywordReadonly) {
+					readonly = true
+					p.advance()
+				}
 				field := p.expect(token.Identifier, "G2044", "I expected a record field name.", "Use name: Type in a record type.")
+				optional := false
+				if p.at(token.Question) {
+					optional = true
+					p.advance()
+				}
 				p.expect(token.Colon, "G2044", "I expected ':' after a record field name.", "Write name: Type.")
 				ft := p.parseType()
-				t.Fields = append(t.Fields, ast.TypeFieldRef{Span: source.Span{Start: field.Span.Start, End: ft.Span.End}, Name: field.Text, Type: ft})
+				t.Fields = append(t.Fields, ast.TypeFieldRef{Span: source.Span{Start: field.Span.Start, End: ft.Span.End}, Name: field.Text, Type: ft, Optional: optional, Readonly: readonly})
 				if !p.at(token.Comma) {
 					break
 				}

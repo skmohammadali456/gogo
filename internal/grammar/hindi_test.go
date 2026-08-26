@@ -16,6 +16,7 @@ func TestStep8HindiVocabularyMappings(t *testing.T) {
 		"आयात": KeywordImport, "लाओ": KeywordImport,
 		"से":  KeywordFrom,
 		"घटक": KeywordComponent, "अवयव": KeywordComponent,
+		"प्रकार": KeywordType, "केवल_पढ़ने": KeywordReadonly,
 	} {
 		if got, ok := v.Lookup(surface); !ok || got != want {
 			t.Fatalf("%q = %v,%v want %v,true", surface, got, ok, want)
@@ -40,7 +41,7 @@ func TestStep8HindiKeywordsAreVocabularyScoped(t *testing.T) {
 
 func TestStep8AllCanonicalKeywordsHaveHindiMappings(t *testing.T) {
 	want := map[Keyword]bool{}
-	for k := KeywordCreate; k <= KeywordComponent; k++ {
+	for k := KeywordCreate; k <= KeywordReadonly; k++ {
 		want[k] = false
 	}
 	for _, k := range Must(Hindi).Entries() {
@@ -66,6 +67,7 @@ func TestStep8HindiVocabularyEntriesAreExactlyIntended(t *testing.T) {
 		"आयात": KeywordImport, "लाओ": KeywordImport,
 		"से":  KeywordFrom,
 		"घटक": KeywordComponent, "अवयव": KeywordComponent,
+		"प्रकार": KeywordType, "केवल_पढ़ने": KeywordReadonly,
 	}
 	got := Must(Hindi).Entries()
 	if len(got) != len(want) {
