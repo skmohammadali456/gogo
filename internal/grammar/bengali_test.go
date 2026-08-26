@@ -16,6 +16,7 @@ func TestStep7BengaliVocabularyMappings(t *testing.T) {
 		"আমদানি": KeywordImport, "ইমপোর্ট": KeywordImport,
 		"থেকে":       KeywordFrom,
 		"কম্পোনেন্ট": KeywordComponent, "উপাদান": KeywordComponent,
+		"ধরন": KeywordType, "শুধু_পঠন": KeywordReadonly,
 	} {
 		if got, ok := v.Lookup(surface); !ok || got != want {
 			t.Fatalf("%q = %v,%v want %v,true", surface, got, ok, want)
@@ -50,6 +51,7 @@ func TestStep8BengaliVocabularyEntriesAreExactlyIntended(t *testing.T) {
 		"আমদানি": KeywordImport, "ইমপোর্ট": KeywordImport,
 		"থেকে":       KeywordFrom,
 		"কম্পোনেন্ট": KeywordComponent, "উপাদান": KeywordComponent,
+		"ধরন": KeywordType, "শুধু_পঠন": KeywordReadonly,
 	}
 	got := Must(Bengali).Entries()
 	if len(got) != len(want) {
