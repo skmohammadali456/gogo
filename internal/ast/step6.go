@@ -1,6 +1,9 @@
 package ast
 
-import "github.com/skmohammadali786/gogo/internal/source"
+import (
+	"github.com/skmohammadali786/gogo/internal/source"
+	"github.com/skmohammadali786/gogo/internal/types"
+)
 
 type TypeRef struct {
 	Span  source.Span
@@ -14,6 +17,9 @@ type TypeRef struct {
 	// compiler resolves it through the canonical types package.
 	Arguments []TypeRef
 	Fields    []TypeFieldRef
+	// Canonical is used only by compiler-created declarations (not parser
+	// output) to retain named session types in the one resolver path.
+	Canonical *types.Type
 }
 
 type TypeFieldRef struct {
@@ -34,6 +40,32 @@ type TypeAliasDecl struct {
 
 func (TypeAliasDecl) node() {}
 func (TypeAliasDecl) stmt() {}
+
+// EnumDecl and InterfaceDecl retain declarations in the one semantic AST;
+// their members resolve through the existing canonical type resolver.
+type EnumDecl struct {
+	Span     source.Span
+	Name     Identifier
+	Variants []EnumVariantDecl
+}
+type EnumVariantDecl struct {
+	Span    source.Span
+	Name    Identifier
+	Payload *TypeRef
+}
+
+func (EnumDecl) node() {}
+func (EnumDecl) stmt() {}
+
+type InterfaceDecl struct {
+	Span       source.Span
+	Name       Identifier
+	Extends    []Identifier
+	Properties []TypeFieldRef
+}
+
+func (InterfaceDecl) node() {}
+func (InterfaceDecl) stmt() {}
 
 func (TypeRef) node() {}
 

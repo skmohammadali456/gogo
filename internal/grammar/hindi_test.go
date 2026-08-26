@@ -17,6 +17,7 @@ func TestStep8HindiVocabularyMappings(t *testing.T) {
 		"से":  KeywordFrom,
 		"घटक": KeywordComponent, "अवयव": KeywordComponent,
 		"प्रकार": KeywordType, "केवल_पढ़ने": KeywordReadonly,
+		"एनम": KeywordEnum, "इंटरफ़ेस": KeywordInterface, "विस्तार": KeywordExtends,
 	} {
 		if got, ok := v.Lookup(surface); !ok || got != want {
 			t.Fatalf("%q = %v,%v want %v,true", surface, got, ok, want)
@@ -68,6 +69,7 @@ func TestStep8HindiVocabularyEntriesAreExactlyIntended(t *testing.T) {
 		"से":  KeywordFrom,
 		"घटक": KeywordComponent, "अवयव": KeywordComponent,
 		"प्रकार": KeywordType, "केवल_पढ़ने": KeywordReadonly,
+		"एनम": KeywordEnum, "इंटरफ़ेस": KeywordInterface, "विस्तार": KeywordExtends,
 	}
 	got := Must(Hindi).Entries()
 	if len(got) != len(want) {

@@ -114,9 +114,115 @@ func (p *Parser) parseCreate() ast.Stmt {
 	if p.atKeyword(grammar.KeywordType) {
 		return p.parseTypeAlias(start)
 	}
+	if p.atKeyword(grammar.KeywordEnum) {
+		return p.parseEnum(start)
+	}
+	if p.atKeyword(grammar.KeywordInterface) {
+		return p.parseInterface(start)
+	}
 	p.error("G2001", "I expected a declaration keyword after 'create'.", "Write create variable name as value, create function name(...), or create component Name { ... }.")
 	p.recoverStatement()
 	return nil
+}
+
+func (p *Parser) parseEnum(start source.Position) ast.Stmt {
+	p.advance()
+	n := p.expect(token.Identifier, "G2044", "I expected an enum name.", "Give the enum a unique name.")
+	if !p.at(token.LBrace) {
+		p.error("G2045", "I expected an enum variant block.", "Add { Variant, ... } after the enum name.")
+		return nil
+	}
+	p.advance()
+	seen := map[string]bool{}
+	var vs []ast.EnumVariantDecl
+	end := n.Span.End
+	for !p.at(token.RBrace) && !p.at(token.EOF) {
+		v := p.expect(token.Identifier, "G2046", "I expected an enum variant name.", "Give each enum variant a name.")
+		if v.Kind == token.Invalid {
+			break
+		}
+		if seen[v.Text] {
+			p.error("G3100", "This enum variant is duplicated.", "Use a unique variant name.")
+		}
+		seen[v.Text] = true
+		var payload *ast.TypeRef
+		if p.atKeyword(grammar.KeywordAs) || p.at(token.Colon) {
+			p.advance()
+			t := p.parseType()
+			payload = &t
+			end = t.Span.End
+		}
+		vs = append(vs, ast.EnumVariantDecl{Span: source.Span{Start: v.Span.Start, End: end}, Name: ast.Identifier{Span: v.Span, Name: v.Text}, Payload: payload})
+		if !p.at(token.Comma) && !p.at(token.Semicolon) {
+			break
+		}
+		p.advance()
+	}
+	if !p.at(token.RBrace) {
+		p.error("G2045", "This enum declaration is missing a closing brace.", "Close the enum declaration with }.")
+	} else {
+		end = p.advance().Span.End
+	}
+	p.consumeTerminator()
+	return ast.EnumDecl{Span: source.Span{Start: start, End: end}, Name: ast.Identifier{Span: n.Span, Name: n.Text}, Variants: vs}
+}
+func (p *Parser) parseInterface(start source.Position) ast.Stmt {
+	p.advance()
+	n := p.expect(token.Identifier, "G2044", "I expected an interface name.", "Give the interface a unique name.")
+	var ex []ast.Identifier
+	if p.atKeyword(grammar.KeywordExtends) {
+		p.advance()
+		for {
+			x := p.expect(token.Identifier, "G2044", "I expected an interface name after extends.", "Name an interface to extend.")
+			if x.Kind == token.Invalid {
+				break
+			}
+			ex = append(ex, ast.Identifier{Span: x.Span, Name: x.Text})
+			if !p.at(token.Comma) {
+				break
+			}
+			p.advance()
+		}
+	}
+	if !p.at(token.LBrace) {
+		p.error("G2047", "I expected an interface property block.", "Add { name as Type } after the interface name.")
+		return nil
+	}
+	p.advance()
+	var fs []ast.TypeFieldRef
+	end := n.Span.End
+	for !p.at(token.RBrace) && !p.at(token.EOF) {
+		ro := false
+		if p.atKeyword(grammar.KeywordReadonly) {
+			ro = true
+			p.advance()
+		}
+		x := p.expect(token.Identifier, "G2048", "I expected an interface property name.", "Give each property a name.")
+		opt := false
+		if p.at(token.Question) {
+			opt = true
+			p.advance()
+		}
+		if !p.atKeyword(grammar.KeywordAs) && !p.at(token.Colon) {
+			p.error("G2049", "I expected a type after this interface property.", "Write property as Type.")
+			break
+		}
+		p.advance()
+		t := p.parseType()
+		end = t.Span.End
+		fs = append(fs, ast.TypeFieldRef{Span: source.Span{Start: x.Span.Start, End: end}, Name: x.Text, Type: t, Optional: opt, Readonly: ro})
+		if !p.at(token.Comma) && !p.at(token.Semicolon) {
+			break
+		}
+		p.advance()
+	}
+	if !p.at(token.RBrace) {
+		p.error("G2047", "This interface declaration is missing a closing brace.", "Close the interface declaration with }.")
+	} else {
+		end = p.advance().Span.End
+	}
+	p.consumeTerminator()
+	return ast.InterfaceDecl{Span: source.Span{Start: start, End: end}, Name: ast.Identifier{Span: n.Span, Name: n.Text}, Extends: ex, Properties: fs}
 }
 
 func (p *Parser) parseConciseCreate() ast.Stmt {

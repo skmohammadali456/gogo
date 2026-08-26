@@ -30,6 +30,9 @@ const (
 	KeywordComponent
 	KeywordType
 	KeywordReadonly
+	KeywordEnum
+	KeywordInterface
+	KeywordExtends
 )
 
 func (k Keyword) String() string {
@@ -60,6 +63,12 @@ func (k Keyword) String() string {
 		return "type"
 	case KeywordReadonly:
 		return "readonly"
+	case KeywordEnum:
+		return "enum"
+	case KeywordInterface:
+		return "interface"
+	case KeywordExtends:
+		return "extends"
 	default:
 		return "unknown"
 	}
@@ -94,6 +103,12 @@ func ParseKeyword(name string) (Keyword, bool) {
 		return KeywordType, true
 	case "readonly":
 		return KeywordReadonly, true
+	case "enum":
+		return KeywordEnum, true
+	case "interface":
+		return KeywordInterface, true
+	case "extends":
+		return KeywordExtends, true
 	default:
 		return KeywordUnknown, false
 	}
@@ -145,7 +160,7 @@ var vocabularies = map[Language]Vocabulary{
 	English: NewVocabulary(English, "English", []Entry{
 		{"create", KeywordCreate}, {"variable", KeywordVariable}, {"function", KeywordFunction},
 		{"as", KeywordAs}, {"return", KeywordReturn}, {"if", KeywordIf}, {"else", KeywordElse},
-		{"constant", KeywordConstant}, {"import", KeywordImport}, {"from", KeywordFrom}, {"component", KeywordComponent}, {"type", KeywordType}, {"readonly", KeywordReadonly},
+		{"constant", KeywordConstant}, {"import", KeywordImport}, {"from", KeywordFrom}, {"component", KeywordComponent}, {"type", KeywordType}, {"readonly", KeywordReadonly}, {"enum", KeywordEnum}, {"interface", KeywordInterface}, {"extends", KeywordExtends},
 		{"let", KeywordVariable}, {"var", KeywordVariable}, {"const", KeywordConstant}, {"fn", KeywordFunction},
 	}),
 	Bengali: NewVocabulary(Bengali, "Bengali", []Entry{
@@ -159,7 +174,7 @@ var vocabularies = map[Language]Vocabulary{
 		{"নইলে", KeywordElse}, {"অন্যথায়", KeywordElse},
 		{"আমদানি", KeywordImport}, {"ইমপোর্ট", KeywordImport},
 		{"থেকে", KeywordFrom},
-		{"কম্পোনেন্ট", KeywordComponent}, {"উপাদান", KeywordComponent}, {"ধরন", KeywordType}, {"শুধু_পঠন", KeywordReadonly},
+		{"কম্পোনেন্ট", KeywordComponent}, {"উপাদান", KeywordComponent}, {"ধরন", KeywordType}, {"শুধু_পঠন", KeywordReadonly}, {"এনাম", KeywordEnum}, {"ইন্টারফেস", KeywordInterface}, {"প্রসারিত", KeywordExtends},
 	}),
 	Hindi: NewVocabulary(Hindi, "Hindi", []Entry{
 		{"बनाओ", KeywordCreate}, {"निर्माण", KeywordCreate},
@@ -172,7 +187,7 @@ var vocabularies = map[Language]Vocabulary{
 		{"वरना", KeywordElse}, {"अन्यथा", KeywordElse},
 		{"आयात", KeywordImport}, {"लाओ", KeywordImport},
 		{"से", KeywordFrom},
-		{"घटक", KeywordComponent}, {"अवयव", KeywordComponent}, {"प्रकार", KeywordType}, {"केवल_पढ़ने", KeywordReadonly},
+		{"घटक", KeywordComponent}, {"अवयव", KeywordComponent}, {"प्रकार", KeywordType}, {"केवल_पढ़ने", KeywordReadonly}, {"एनम", KeywordEnum}, {"इंटरफ़ेस", KeywordInterface}, {"विस्तार", KeywordExtends},
 	}),
 }
 

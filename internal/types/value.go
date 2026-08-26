@@ -9,6 +9,10 @@ type Value struct {
 	typ  Type
 	data any
 }
+type EnumData struct {
+	Enum, Variant string
+	Payload       *Value
+}
 
 func (v Value) Type() Type { return v.typ }
 func (v Value) Data() any  { return cloneData(v.data) }
@@ -31,6 +35,12 @@ func cloneData(data any) any {
 		return UnionData{Member: value.Member, Value: value.Value}
 	case ResultData:
 		return ResultData{OK: value.OK, Value: value.Value}
+	case EnumData:
+		if value.Payload == nil {
+			return value
+		}
+		p := *value.Payload
+		return EnumData{Enum: value.Enum, Variant: value.Variant, Payload: &p}
 	case map[string]Value:
 		out := make(map[string]Value, len(value))
 		for k, v := range value {
@@ -47,6 +57,28 @@ func NumberValue(text string) Value  { return Value{typ: Number, data: text} }
 func BooleanValue(value bool) Value  { return Value{typ: Boolean, data: value} }
 func BigIntValue(text string) Value  { return Value{typ: BigInt, data: text} }
 func BytesValue(value []byte) Value  { return Value{typ: Bytes, data: append([]byte(nil), value...)} }
+
+// EnumValue validates the selected canonical variant and defensively retains
+// its optional payload at the private Value boundary.
+func EnumValue(variant Type, payload *Value) (Value, error) {
+	if variant.Kind() != EnumVariantKind {
+		return Value{}, fmt.Errorf("enum value requires an enum variant type")
+	}
+	want, hasPayload := variant.VariantPayload()
+	if hasPayload {
+		if payload == nil || !payload.typ.AssignableTo(want) {
+			return Value{}, fmt.Errorf("enum payload is incompatible")
+		}
+	} else if payload != nil {
+		return Value{}, fmt.Errorf("enum variant does not accept a payload")
+	}
+	data := EnumData{Enum: variant.EnumName(), Variant: variant.VariantName()}
+	if payload != nil {
+		p := *payload
+		data.Payload = &p
+	}
+	return Value{typ: variant, data: data}, nil
+}
 
 func ArrayValue(t Type, values []Value) (Value, error) {
 	element, ok := t.Element()

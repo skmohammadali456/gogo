@@ -13,6 +13,9 @@ import (
 func ResolveType(ref ast.TypeRef) (types.Type, error) { return resolveType(ref, nil, nil) }
 
 func resolveType(ref ast.TypeRef, aliases map[string]ast.TypeRef, resolving map[string]bool) (types.Type, error) {
+	if ref.Canonical != nil {
+		return *ref.Canonical, nil
+	}
 	if len(ref.Union) > 0 {
 		members := make([]types.Type, len(ref.Union))
 		for i := range ref.Union {

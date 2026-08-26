@@ -297,3 +297,7 @@ gogo/
 Every GOGO step must be implemented in the repository, tested, integrated with previous work, documented, reviewed for architectural consistency, and validated before it is marked complete.
 
 The GitHub repository is the source of truth for the GOGO codebase.
+
+**14. Enums and interfaces**
+
+Status: **COMPLETE**. Canonical session-scoped enums and variant expressions, payload validation, structural interface contracts, deterministic extension checks, and multilingual enum/interface vocabulary are available. See `docs/compiler/enums-interfaces.md`.

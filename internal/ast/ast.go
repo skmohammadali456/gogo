@@ -156,6 +156,12 @@ func SpanOf(n Node) source.Span {
 		return v.Span
 	case ComponentDecl:
 		return v.Span
+	case TypeAliasDecl:
+		return v.Span
+	case EnumDecl:
+		return v.Span
+	case InterfaceDecl:
+		return v.Span
 	case ArrayExpr:
 		return v.Span
 	case ObjectExpr:
