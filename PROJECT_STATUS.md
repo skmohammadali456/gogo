@@ -6,9 +6,9 @@
 - Compiler implementation language: Go
 - Repository: `skmohammadali786/gogo`
 - Release target: GOGO 1.0
-- Completed work packages: 11 / 62
-- Current work package: 11, complete
-- Status: Steps 1 through 11 are complete. Step 11 is ready for review.
+- Completed work packages: 12 / 62
+- Current work package: 12, complete
+- Status: Steps 1 through 12 are complete. Step 12 is ready for review.
 
 ## Step 1, Compiler source model and positions
 
@@ -160,3 +160,8 @@ Step 10 adds `internal/types`, the single canonical language-independent type mo
 Status: **COMPLETE**
 
 Step 11 extends the single canonical `internal/types` model with structural object properties, optional and readonly metadata, deterministic order-independent equality, structural assignability, canonical string index signatures, and safe runtime object validation. `create type Name as Type` aliases resolve within an isolated compiler session to canonical target types; duplicates, unresolved aliases, and cycles are diagnosed. English, Bengali, and Hindi keyword spellings are handled through `grammar.Vocabulary`. The parser intentionally has no invented index-signature syntax; the canonical API documents that surface boundary. See `docs/compiler/object-types-aliases.md`.
+
+
+## Step 12, Optional, union, intersection, and result types
+
+Step 12 is complete. `internal/types` now owns canonical Optional, Union, Intersection, and Result kinds with recursive normalization, deterministic equality, explicit assignability, mutability propagation, and safe runtime value constructors. The existing parser `parseType` handles `Optional<T>`, `Result<Ok, Err>`, `A | B`, `A & B`, literal members, object members, aliases, and parenthesized combinations through the same `ast.TypeRef` and compiler `ResolveType` path used by Steps 10 and 11. Optional values are explicit absent/present wrappers rather than implicit nulls. Union-to-target assignability requires every possible member to satisfy the target; concrete values satisfy a union by matching one member. Intersections require all member constraints and merge compatible object fields structurally while preserving readonly/optional rules. English, Bengali, and Hindi sessions remain isolated and produce the same canonical types. See `docs/compiler/optional-union-intersection-result.md`.

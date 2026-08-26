@@ -13,6 +13,28 @@ import (
 func ResolveType(ref ast.TypeRef) (types.Type, error) { return resolveType(ref, nil, nil) }
 
 func resolveType(ref ast.TypeRef, aliases map[string]ast.TypeRef, resolving map[string]bool) (types.Type, error) {
+	if len(ref.Union) > 0 {
+		members := make([]types.Type, len(ref.Union))
+		for i := range ref.Union {
+			var err error
+			members[i], err = resolveType(ref.Union[i], aliases, resolving)
+			if err != nil {
+				return types.Type{}, err
+			}
+		}
+		return types.Union(members...)
+	}
+	if len(ref.Intersection) > 0 {
+		members := make([]types.Type, len(ref.Intersection))
+		for i := range ref.Intersection {
+			var err error
+			members[i], err = resolveType(ref.Intersection[i], aliases, resolving)
+			if err != nil {
+				return types.Type{}, err
+			}
+		}
+		return types.Intersection(members...)
+	}
 	name := strings.ToLower(ref.Name)
 	var t types.Type
 	switch name {
@@ -26,6 +48,28 @@ func resolveType(ref ast.TypeRef, aliases map[string]ast.TypeRef, resolving map[
 		t = types.BigInt
 	case "bytes":
 		t = types.Bytes
+	case "optional":
+		if len(ref.Arguments) != 1 {
+			return types.Type{}, fmt.Errorf("optional requires exactly one type")
+		}
+		e, err := resolveType(ref.Arguments[0], aliases, resolving)
+		if err != nil {
+			return types.Type{}, err
+		}
+		t = types.Optional(e)
+	case "result":
+		if len(ref.Arguments) != 2 {
+			return types.Type{}, fmt.Errorf("result requires ok and err types")
+		}
+		okt, err := resolveType(ref.Arguments[0], aliases, resolving)
+		if err != nil {
+			return types.Type{}, err
+		}
+		errt, err := resolveType(ref.Arguments[1], aliases, resolving)
+		if err != nil {
+			return types.Type{}, err
+		}
+		t = types.Result(okt, errt)
 	case "array":
 		if len(ref.Arguments) != 1 {
 			return types.Type{}, fmt.Errorf("array requires exactly one element type")
@@ -82,6 +126,14 @@ func resolveType(ref ast.TypeRef, aliases map[string]ast.TypeRef, resolving map[
 			return types.Type{}, err
 		}
 	default:
+		if len(ref.Name) > 0 && (ref.Name[0] == '"' || ref.Name[0] == '\'') {
+			t = types.Literal(types.String, ref.Name)
+			break
+		}
+		if len(ref.Name) > 0 && ref.Name[0] >= '0' && ref.Name[0] <= '9' {
+			t = types.Literal(types.Number, ref.Name)
+			break
+		}
 		if aliases == nil {
 			return types.Type{}, fmt.Errorf("unknown canonical type %q", ref.Name)
 		}
